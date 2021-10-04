@@ -4,7 +4,15 @@ import shutil
 from pathlib import Path
 from typing import Callable
 
-from model import Logbook, Year, Month, Day, ParseError
+from model import Logbook, Year, Month, Day, ParseError, Footer
+
+DATE_1 = datetime.date(2021, 8, 20)
+
+DATE_2 = datetime.date(2021, 9, 19)
+
+DAY_1_RELATIVE_PATH = '2021/08/20/20210820.md'
+
+DAY_2_RELATIVE_PATH = '2021/09/19/20210919.md'
 
 TEST_ROOT = Path(__file__).parent
 
@@ -19,7 +27,7 @@ class TestLogbook:
 
     def test_path(self, tmp_path):
         logbook = Logbook(tmp_path)
-        assert logbook.path == tmp_path
+        assert logbook.path == tmp_path / 'index.md'
 
     def test_parse_valid(self, tmp_path):
         logbook_path = create_logbook_files(tmp_path)
@@ -99,7 +107,6 @@ class TestDay:
         logbook_path = create_logbook_files(tmp_path)
         day = Day(logbook_path, datetime.date(2021, 8, 20))
         result = day.parse()
-        assert day.parsed
         assert result.valid
         assert not result.errors
 
@@ -107,7 +114,6 @@ class TestDay:
         logbook_path = create_logbook_files(tmp_path)
         day = Day(logbook_path, datetime.date(2021, 8, 19))
         result = day.parse()
-        assert day.parsed
         assert ParseError(day.path, 'Markdown file does not exist') in result.errors
 
     def test_parse_invalid_missing_footer(self, tmp_path):
@@ -120,9 +126,72 @@ class TestDay:
         assert ParseError(day.path, 'Missing footer') in result.errors
 
 
+class TestFooter:
+    def test_dataclass(self, tmp_path):
+        footer1 = Footer(Day(tmp_path, DATE_2))
+        footer2 = Footer(Day(tmp_path, DATE_1))
+        assert footer2 < footer1
+        assert footer1 == Footer(Day(tmp_path, DATE_2))
+
+    def test_template_for_day(self, tmp_path):
+        footer = Footer(Day(tmp_path, DATE_1))
+        assert '=../../../style.css' in footer.template
+
+    def test_template_for_month(self, tmp_path):
+        footer = Footer(Month(tmp_path, DATE_1))
+        assert '=../../style.css' in footer.template
+
+    def test_template_for_year(self, tmp_path):
+        footer = Footer(Year(tmp_path, DATE_1))
+        assert '=../style.css' in footer.template
+
+    def test_template_for_logbook(self, tmp_path):
+        footer = Footer(Logbook(tmp_path))
+        assert '=style.css' in footer.template
+
+    def test_parse_valid(self, tmp_path):
+        logbook_path = create_logbook_files(tmp_path)
+        footer = Footer(Day(logbook_path, DATE_1))
+        result = footer.parse()
+        assert result.valid
+        assert not result.errors
+
+    def test_parse_invalid_missing_footer(self, tmp_path):
+        def remove_footer(day_text):
+            return re.sub(r'<footer.*?footer>', '', day_text)
+
+        logbook_path = create_logbook_files(tmp_path, remove_footer)
+        footer = Footer(Day(logbook_path, DATE_1))
+        assert ParseError(footer.path, 'Missing footer') in footer.parse().errors
+
+    def test_parse_invalid_multiple_footers(self, tmp_path):
+        def add_footer(day_text):
+            return day_text + '\n<footer><hr></footer>'
+
+        logbook_path = create_logbook_files(tmp_path, add_footer)
+        footer = Footer(Day(logbook_path, DATE_1))
+        assert ParseError(footer.path, 'Multiple footers') in footer.parse().errors
+
+    def test_parse_invalid_footer_missing_rule(self, tmp_path):
+        def remove_hr(day_text):
+            return re.sub(r'<footer.*?footer>', '<footer></footer>', day_text)
+
+        logbook_path = create_logbook_files(tmp_path, remove_hr)
+        footer = Footer(Day(logbook_path, DATE_1))
+        assert ParseError(footer.path, 'Footer is missing rule') in footer.parse().errors
+
+    def test_parse_invalid_footer_missing_stylesheet_link(self, tmp_path):
+        def remove_link(day_text):
+            return re.sub(r'<link[^>]*?>', '', day_text)
+
+        logbook_path = create_logbook_files(tmp_path, remove_link)
+        footer = Footer(Day(logbook_path, DATE_1))
+        assert ParseError(footer.path, 'Footer is missing stylesheet link') in footer.parse().errors
+
+
 def create_logbook_files(root: Path, day_mutator: Callable[[str], str] = lambda s: s):
     logbook_path = root / 'logbook'
     shutil.copytree(TEST_ROOT / 'resources', logbook_path)
-    day_path = logbook_path / '2021' / '08' / '20' / '20210820.md'
+    day_path = logbook_path / DAY_1_RELATIVE_PATH
     day_path.write_text(day_mutator(day_path.read_text()))
     return logbook_path

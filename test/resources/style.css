@@ -1,0 +1,32 @@
+table {
+    margin: 0 auto 100vh
+}
+
+table table {
+    margin: 0 auto
+}
+
+td, th {
+    font-size: 1rem;
+    font-family: monospace;
+    padding: .125rem .25rem !important;
+    vertical-align: top
+}
+
+td td {
+    text-align: right
+}
+
+h1 {
+    text-align: center
+}
+
+footer {
+    min-height: 100vh
+}
+
+footer > hr {
+    background-image: radial-gradient(closest-side, #000, #fff) !important;
+    border: 0;
+    height: 3px
+}
