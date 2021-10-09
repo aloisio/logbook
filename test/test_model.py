@@ -4,7 +4,7 @@ import shutil
 from pathlib import Path
 from typing import Callable
 
-from model import Logbook, Year, Month, Day, ParseError, Footer
+from model import Logbook, Year, Month, Day, ParseError, Footer, InternalLink
 
 DATE_1 = datetime.date(2021, 8, 20)
 
@@ -13,6 +13,12 @@ DATE_2 = datetime.date(2021, 9, 19)
 DAY_1_RELATIVE_PATH = '2021/08/20/20210820.md'
 
 DAY_2_RELATIVE_PATH = '2021/09/19/20210919.md'
+
+MONTH_1_RELATIVE_PATH = '2021/08/202108.md'
+
+YEAR_RELATIVE_PATH = '2021/2021.md'
+
+LOGBOOK_RELATIVE_PATH = 'index.md'
 
 TEST_ROOT = Path(__file__).parent
 
@@ -128,40 +134,41 @@ class TestDay:
 
 class TestFooter:
     def test_dataclass(self, tmp_path):
-        footer1 = Footer(Day(tmp_path, DATE_2))
-        footer2 = Footer(Day(tmp_path, DATE_1))
+        footer1 = Footer(tmp_path, tmp_path / DAY_2_RELATIVE_PATH)
+        footer2 = Footer(tmp_path, tmp_path / DAY_1_RELATIVE_PATH)
         assert footer2 < footer1
-        assert footer1 == Footer(Day(tmp_path, DATE_2))
+        assert footer1 == Footer(tmp_path, tmp_path / DAY_2_RELATIVE_PATH)
 
     def test_template_for_day(self, tmp_path):
-        footer = Footer(Day(tmp_path, DATE_1))
+        footer = Footer(tmp_path, tmp_path / DAY_1_RELATIVE_PATH)
         assert '=../../../style.css' in footer.template
 
     def test_template_for_month(self, tmp_path):
-        footer = Footer(Month(tmp_path, DATE_1))
+        footer = Footer(tmp_path, tmp_path / MONTH_1_RELATIVE_PATH)
         assert '=../../style.css' in footer.template
 
     def test_template_for_year(self, tmp_path):
-        footer = Footer(Year(tmp_path, DATE_1))
+        footer = Footer(tmp_path, tmp_path / YEAR_RELATIVE_PATH)
         assert '=../style.css' in footer.template
 
     def test_template_for_logbook(self, tmp_path):
-        footer = Footer(Logbook(tmp_path))
+        footer = Footer(tmp_path, tmp_path / LOGBOOK_RELATIVE_PATH)
         assert '=style.css' in footer.template
 
     def test_parse_valid(self, tmp_path):
         logbook_path = create_logbook_files(tmp_path)
-        footer = Footer(Day(logbook_path, DATE_1))
+        footer = Footer(logbook_path, logbook_path / DAY_1_RELATIVE_PATH)
         result = footer.parse()
         assert result.valid
         assert not result.errors
+        assert footer.link == InternalLink(logbook_path / DAY_1_RELATIVE_PATH, logbook_path / 'style.css')
 
     def test_parse_invalid_missing_footer(self, tmp_path):
         def remove_footer(day_text):
             return re.sub(r'<footer.*?footer>', '', day_text)
 
         logbook_path = create_logbook_files(tmp_path, remove_footer)
-        footer = Footer(Day(logbook_path, DATE_1))
+        footer = Footer(logbook_path, logbook_path / DAY_1_RELATIVE_PATH)
         assert ParseError(footer.path, 'Missing footer') in footer.parse().errors
 
     def test_parse_invalid_multiple_footers(self, tmp_path):
@@ -169,7 +176,7 @@ class TestFooter:
             return day_text + '\n<footer><hr></footer>'
 
         logbook_path = create_logbook_files(tmp_path, add_footer)
-        footer = Footer(Day(logbook_path, DATE_1))
+        footer = Footer(logbook_path, logbook_path / DAY_1_RELATIVE_PATH)
         assert ParseError(footer.path, 'Multiple footers') in footer.parse().errors
 
     def test_parse_invalid_footer_missing_rule(self, tmp_path):
@@ -177,16 +184,48 @@ class TestFooter:
             return re.sub(r'<footer.*?footer>', '<footer></footer>', day_text)
 
         logbook_path = create_logbook_files(tmp_path, remove_hr)
-        footer = Footer(Day(logbook_path, DATE_1))
+        footer = Footer(logbook_path, logbook_path / DAY_1_RELATIVE_PATH)
         assert ParseError(footer.path, 'Footer is missing rule') in footer.parse().errors
+
+    def test_parse_invalid_footer_multiple_rules(self, tmp_path):
+        def duplicate_hr(day_text):
+            return re.sub(r'(<hr[^>]*?>)', r'\1\1', day_text)
+
+        logbook_path = create_logbook_files(tmp_path, duplicate_hr)
+        footer = Footer(logbook_path, logbook_path / DAY_1_RELATIVE_PATH)
+        assert ParseError(footer.path, 'Footer has multiple rules') in footer.parse().errors
 
     def test_parse_invalid_footer_missing_stylesheet_link(self, tmp_path):
         def remove_link(day_text):
             return re.sub(r'<link[^>]*?>', '', day_text)
 
         logbook_path = create_logbook_files(tmp_path, remove_link)
-        footer = Footer(Day(logbook_path, DATE_1))
+        footer = Footer(logbook_path, logbook_path / DAY_1_RELATIVE_PATH)
         assert ParseError(footer.path, 'Footer is missing stylesheet link') in footer.parse().errors
+
+    def test_parse_invalid_footer_has_link_rel_different_than_stylesheet(self, tmp_path):
+        def invalidate_link(day_text):
+            return re.sub(r'rel=stylesheet', 'rel=prefetch', day_text)
+
+        logbook_path = create_logbook_files(tmp_path, invalidate_link)
+        footer = Footer(logbook_path, logbook_path / DAY_1_RELATIVE_PATH)
+        assert ParseError(footer.path, 'Footer is missing stylesheet link') in footer.parse().errors
+
+    def test_parse_invalid_footer_has_multiple_links(self, tmp_path):
+        def duplicate_link(day_text):
+            return re.sub(r'(<link[^>]*?>)', r'\1\1', day_text)
+
+        logbook_path = create_logbook_files(tmp_path, duplicate_link)
+        footer = Footer(logbook_path, logbook_path / DAY_1_RELATIVE_PATH)
+        assert ParseError(footer.path, 'Footer has multiple links') in footer.parse().errors
+
+    def test_parse_invalid_footer_is_not_last_element(self, tmp_path):
+        def add_content(day_text):
+            return re.sub(r'(<footer.*?footer>)', r'\1<p>Finis</p>', day_text)
+
+        logbook_path = create_logbook_files(tmp_path, add_content)
+        footer = Footer(logbook_path, logbook_path / DAY_1_RELATIVE_PATH)
+        assert ParseError(footer.path, 'Footer is not last element') in footer.parse().errors
 
 
 def create_logbook_files(root: Path, day_mutator: Callable[[str], str] = lambda s: s):

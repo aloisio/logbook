@@ -155,7 +155,7 @@ class Day(Parsable):
 
     @cached_property
     def footer(self):
-        return Footer(self)
+        return Footer(self.root, self.path)
 
     class Parser(Parsable.Parser['Day']):
         def parse(self) -> ParseResult:
@@ -166,40 +166,66 @@ class Day(Parsable):
 
 
 @dataclass(frozen=True, order=True)
-class Footer(Parsable):
-    container: ExtendsParsable
+class InternalLink:
+    source: Path
+    destination: Path
+    fragment: str = None
 
-    @cached_property
-    def root(self) -> Path:
-        return self.container.root
+
+@dataclass(order=True)
+class Footer(Parsable):
+    root: Path
+    path: Path
+    link: InternalLink = None
 
     @cached_property
     def path(self) -> Path:
-        return self.container.path
+        return self.path
 
     @cached_property
     def template(self) -> str:
         style_href = relpath(self.root / 'style.css', self.path.parent)
         return dedent(f'''
-            <link href={style_href} rel=stylesheet>
-            <footer><hr></footer>
+            <footer><link href={style_href} rel=stylesheet><hr></footer>
         ''')
 
     class Parser(Parsable.Parser['Footer']):
+        @cached_property
+        def tree(self):
+            return parse_markdown(self.context.path)
+
         def parse(self) -> ParseResult:
             self.result.reset()
-            tree = parse_markdown(self.context.path)
-            footers = tree.findall('.//footer')
-            if not footers:
+            if (footer := self.__parse_footer_element()) is not None:
+                self.__parse_horizontal_rule(footer)
+                self.__parse_stylesheet_link(footer)
+            return self.result
+
+        def __parse_footer_element(self):
+            if not (footers := self.tree.findall('.//footer')):
                 self.result.add_error(self.context.path, 'Missing footer')
             elif len(footers) > 1:
                 self.result.add_error(self.context.path, 'Multiple footers')
+            elif footers[0].getnext() is not None:
+                self.result.add_error(self.context.path, 'Footer is not last element')
             else:
-                if not (footer := footers[0]).findall('./hr'):
-                    self.result.add_error(self.context.path, 'Footer is missing rule')
-                if not footer.findall('./link'):
-                    self.result.add_error(self.context.path, 'Footer is missing stylesheet link')
-            return self.result
+                return footers[0]
+            return None
+
+        def __parse_horizontal_rule(self, footer):
+            if not (rules := footer.findall('./hr')):
+                self.result.add_error(self.context.path, 'Footer is missing rule')
+            elif len(rules) > 1:
+                self.result.add_error(self.context.path, 'Footer has multiple rules')
+
+        def __parse_stylesheet_link(self, footer):
+            if not (links := footer.findall('./link')) or links[0].attrib['rel'] != 'stylesheet':
+                self.result.add_error(self.context.path, 'Footer is missing stylesheet link')
+            elif len(links) > 1:
+                self.result.add_error(self.context.path, 'Footer has multiple links')
+            else:
+                destination = (self.context.path.parent / links[0].attrib['href']).resolve()
+                self.context.link = InternalLink(self.context.path, destination)
 
 
 @lru_cache
