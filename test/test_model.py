@@ -133,7 +133,8 @@ class TestDay:
 
     def test_parse_valid(self, tmp_path):
         logbook_path = create_logbook_files(tmp_path)
-        day = Day(logbook_path, datetime.date(2021, 8, 20))
+        day = Day(logbook_path, DATE_1)
+        day.next = Day(logbook_path, DATE_2)
         result = day.parse()
         assert result.valid
         assert not result.errors
@@ -153,6 +154,15 @@ class TestDay:
         result = day.parse()
         assert ParseError(day.path, 'Missing footer') in result.errors
 
+    def test_parse_invalid_missing_header(self, tmp_path):
+        def remove_header(day_text):
+            return re.sub(r'^# .*?\n', '', day_text)
+
+        logbook_path = create_logbook_files(tmp_path, remove_header)
+        day = Day(logbook_path, DATE_1)
+        result = day.parse()
+        assert ParseError(day.path, 'Missing header') in result.errors
+
 
 class TestDayHeader:
     def test_dataclass(self, tmp_path):
@@ -164,8 +174,12 @@ class TestDayHeader:
 
     def test_valid(self, tmp_path):
         logbook_path = create_logbook_files(tmp_path)
-        header1 = DayHeader(Day(logbook_path, DATE_1))
-        header2 = DayHeader(Day(logbook_path, DATE_2))
+        day1 = Day(logbook_path, DATE_1)
+        day2 = Day(logbook_path, DATE_2)
+        day1.next = day2
+        day2.previous = day1
+        header1 = DayHeader(day1)
+        header2 = DayHeader(day2)
         assert not header1.parse().errors
         assert not header2.parse().errors
 
@@ -192,6 +206,14 @@ class TestDayHeader:
         logbook_path = create_logbook_files(tmp_path, move_h1_down)
         header = DayHeader(Day(logbook_path, DATE_1))
         assert ParseError(header.path, 'Header is not first element') in header.parse().errors
+
+    def test_invalid_h1_content(self, tmp_path):
+        def invalidate_header(day_text):
+            return re.sub(r'^\(\.\.', '(.', day_text)
+
+        logbook_path = create_logbook_files(tmp_path, invalidate_header)
+        header = DayHeader(Day(logbook_path, DATE_1))
+        assert ParseError(header.path, 'Header content problem') in header.parse().errors
 
     def test_template(self, tmp_path):
         logbook_path = create_logbook_files(tmp_path)
@@ -253,7 +275,7 @@ class TestFooter:
 
         logbook_path = create_logbook_files(tmp_path, remove_hr)
         footer = Footer(Day(logbook_path, DATE_1))
-        assert ParseError(footer.path, 'Footer is missing rule') in footer.parse().errors
+        assert ParseError(footer.path, 'Footer content problem') in footer.parse().errors
 
     def test_parse_invalid_footer_multiple_rules(self, tmp_path):
         def duplicate_hr(day_text):
@@ -261,7 +283,7 @@ class TestFooter:
 
         logbook_path = create_logbook_files(tmp_path, duplicate_hr)
         footer = Footer(Day(logbook_path, DATE_1))
-        assert ParseError(footer.path, 'Footer has multiple rules') in footer.parse().errors
+        assert ParseError(footer.path, 'Footer content problem') in footer.parse().errors
 
     def test_parse_invalid_footer_missing_stylesheet_link(self, tmp_path):
         def remove_link(day_text):
@@ -269,7 +291,7 @@ class TestFooter:
 
         logbook_path = create_logbook_files(tmp_path, remove_link)
         footer = Footer(Day(logbook_path, DATE_1))
-        assert ParseError(footer.path, 'Footer is missing stylesheet link') in footer.parse().errors
+        assert ParseError(footer.path, 'Footer content problem') in footer.parse().errors
 
     def test_parse_invalid_footer_has_link_rel_different_than_stylesheet(self, tmp_path):
         def invalidate_link(day_text):
@@ -277,7 +299,23 @@ class TestFooter:
 
         logbook_path = create_logbook_files(tmp_path, invalidate_link)
         footer = Footer(Day(logbook_path, DATE_1))
-        assert ParseError(footer.path, 'Footer is missing stylesheet link') in footer.parse().errors
+        assert ParseError(footer.path, 'Footer content problem') in footer.parse().errors
+
+    def test_parse_invalid_footer_wrong_link_href(self, tmp_path):
+        def invalidate_link(day_text):
+            return re.sub(r'href=../../../style.css', 'href=style.css', day_text)
+
+        logbook_path = create_logbook_files(tmp_path, invalidate_link)
+        footer = Footer(Day(logbook_path, DATE_1))
+        assert ParseError(footer.path, 'Footer content problem') in footer.parse().errors
+
+    def test_parse_invalid_footer_missing_link_href(self, tmp_path):
+        def invalidate_link(day_text):
+            return re.sub(r'href=../../../style.css', '', day_text)
+
+        logbook_path = create_logbook_files(tmp_path, invalidate_link)
+        footer = Footer(Day(logbook_path, DATE_1))
+        assert ParseError(footer.path, 'Footer content problem') in footer.parse().errors
 
     def test_parse_invalid_footer_has_multiple_links(self, tmp_path):
         def duplicate_link(day_text):
@@ -285,7 +323,7 @@ class TestFooter:
 
         logbook_path = create_logbook_files(tmp_path, duplicate_link)
         footer = Footer(Day(logbook_path, DATE_1))
-        assert ParseError(footer.path, 'Footer has multiple links') in footer.parse().errors
+        assert ParseError(footer.path, 'Footer content problem') in footer.parse().errors
 
     def test_parse_invalid_footer_is_not_last_element(self, tmp_path):
         def add_content(day_text):

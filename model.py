@@ -12,6 +12,7 @@ from typing import List, TypeVar, Generic, final, Pattern, ClassVar, Union, Iter
 
 from lxml import html
 from lxml.html import HtmlElement
+from lxml.html.soupparser import fromstring
 from markdown import markdown
 
 
@@ -19,6 +20,7 @@ from markdown import markdown
 class ParseError:
     path: Path
     message: str
+    hint: str = field(default=None, compare=False)
 
 
 @dataclass(frozen=True)
@@ -29,8 +31,8 @@ class ParseResult:
     def valid(self) -> bool:
         return not self.errors
 
-    def add_error(self, path: Path, message: str) -> 'ParseResult':
-        self.errors.append(ParseError(path, message))
+    def add_error(self, path: Path, message: str, hint: str = None) -> 'ParseResult':
+        self.errors.append(ParseError(path, message, hint))
         return self
 
     def reset(self):
@@ -94,10 +96,6 @@ class Day(Parsable):
         yyyy, mm, dd = f'{self.year:04d}', f'{self.month:02d}', f'{self.day:02d}'
         return self.root / yyyy / mm / dd / f'{yyyy}{mm}{dd}.md'
 
-    @cached_property
-    def footer(self):
-        return Footer(self)
-
     @staticmethod
     @lru_cache
     def create(root: Path) -> List['Day']:
@@ -124,7 +122,8 @@ class Day(Parsable):
             self.result.reset()
             if not self.context.path.exists():
                 return self.result.add_error(self.context.path, 'Markdown file does not exist')
-            return self.result.update(self.context.footer.parse())
+            self.result.update(DayHeader(self.context).parse())
+            return self.result.update(Footer(self.context).parse())
 
 
 @dataclass(frozen=True, order=True)
@@ -230,11 +229,14 @@ class DayHeader(Parsable):
             self.result.reset()
             tree = parse_markdown(self.context.path)
             if not (h1s := tree.findall('./h1')):
-                return self.result.add_error(self.context.path, 'Missing header')
+                return self.result.add_error(self.context.path, 'Missing header', self.context.template)
             if len(h1s) > 1:
-                return self.result.add_error(self.context.path, 'Multiple headers')
+                self.result.add_error(self.context.path, 'Multiple headers')
             if h1s[0].getprevious() is not None:
                 self.result.add_error(self.context.path, 'Header is not first element')
+            expected = parse_markdown_element(self.context.template)
+            if html_to_string(expected) != html_to_string(h1s[0]):
+                self.result.add_error(self.context.path, 'Header content problem', self.context.template)
             return self.result
 
 
@@ -258,40 +260,30 @@ class Footer(Parsable):
 
         def parse(self) -> ParseResult:
             self.result.reset()
-            if (footer := self.__parse_footer_element()) is not None:
-                self.__parse_horizontal_rule(footer)
-                self.__parse_stylesheet_link(footer)
-            return self.result
-
-        def __parse_footer_element(self):
             if not (footers := self.tree.findall('.//footer')):
-                self.result.add_error(self.context.path, 'Missing footer')
+                self.result.add_error(self.context.path, 'Missing footer', self.context.template)
             elif len(footers) > 1:
                 self.result.add_error(self.context.path, 'Multiple footers')
             elif footers[0].getnext() is not None:
                 self.result.add_error(self.context.path, 'Footer is not last element')
-            else:
-                return footers[0]
-            return None
-
-        def __parse_horizontal_rule(self, footer):
-            if not (rules := footer.findall('./hr')):
-                self.result.add_error(self.context.path, 'Footer is missing rule')
-            elif len(rules) > 1:
-                self.result.add_error(self.context.path, 'Footer has multiple rules')
-
-        def __parse_stylesheet_link(self, footer):
-            if not (links := footer.findall('./link')) or links[0].attrib['rel'] != 'stylesheet':
-                self.result.add_error(self.context.path, 'Footer is missing stylesheet link')
-            elif len(links) > 1:
-                self.result.add_error(self.context.path, 'Footer has multiple links')
+            elif html_to_string(parse_markdown_element(self.context.template)) != html_to_string(footers[0]):
+                self.result.add_error(self.context.path, 'Footer content problem', self.context.template)
+            return self.result
 
 
 @lru_cache
 def parse_markdown(path: Path) -> HtmlElement:
-    return html.fragment_fromstring(
-        markdown(path.read_text(encoding='utf-8'), output_format='html'),
-        create_parent=True)
+    # Using slower beautifulsoup parser because lxml mangles input with emojis
+    return fromstring(
+        markdown(path.read_text(encoding='utf-8'), output_format='html').strip())
+
+
+def parse_markdown_element(string: str) -> HtmlElement:
+    return html.fragment_fromstring(markdown(string, output_format='html'))
+
+
+def html_to_string(element: HtmlElement) -> str:
+    return html.tostring(element, encoding='unicode').strip()
 
 
 def triplewise(iterable: Iterable[Any]):
