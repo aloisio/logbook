@@ -6,19 +6,13 @@ from typing import Callable
 
 from model import Logbook, Year, Month, Day, ParseError, Footer, DayHeader
 
-DATE_1 = datetime.date(2021, 8, 20)
+DATE_1 = datetime.date(2020, 8, 20)
 
-DATE_2 = datetime.date(2021, 9, 19)
+DATE_2 = datetime.date(2021, 8, 20)
 
-DAY_1_RELATIVE_PATH = '2021/08/20/20210820.md'
+DATE_3 = datetime.date(2021, 9, 19)
 
-DAY_2_RELATIVE_PATH = '2021/09/19/20210919.md'
-
-MONTH_1_RELATIVE_PATH = '2021/08/202108.md'
-
-YEAR_RELATIVE_PATH = '2021/2021.md'
-
-LOGBOOK_RELATIVE_PATH = 'index.md'
+DAY_1_RELATIVE_PATH = '2020/08/20/20200820.md'
 
 TEST_ROOT = Path(__file__).parent
 
@@ -39,9 +33,15 @@ class TestLogbook:
         logbook_path = create_logbook_files(tmp_path)
         logbook = Logbook(logbook_path)
         result = logbook.parse()
-        assert logbook.years == [Year(Day(logbook_path, DATE_1))]
+        assert logbook.years == [Year(Day(logbook_path, DATE_1)), Year(Day(logbook_path, DATE_2))]
         assert result.valid
         assert not result.errors
+
+    def test_parse_invalid_missing_stylesheet(self, tmp_path):
+        logbook_path = create_logbook_files(tmp_path)
+        (logbook_path / 'style.css').unlink()
+        result = Logbook(logbook_path).parse()
+        assert ParseError(logbook_path, 'Missing style.css') in result.errors
 
 
 class TestYear:
@@ -59,20 +59,40 @@ class TestYear:
         year2 = Year(Day(tmp_path, datetime.date(2020, 12, 31)))
         assert {year1, year2} == {Year(Day(tmp_path, datetime.date(2020, 8, 1)))}
 
+    def test_create_from_files(self, tmp_path):
+        logbook_path = create_logbook_files(tmp_path)
+        all_years = Year.create(logbook_path)
+        assert all_years == [Year(Day(logbook_path, DATE_1)), Year(Day(logbook_path, DATE_2))]
+        assert all_years[0].previous is None
+        assert all_years[1].previous == all_years[0]
+        assert all_years[0].next == all_years[1]
+        assert all_years[1].next is None
+
     def test_path(self, tmp_path):
         year = Year(Day(tmp_path, datetime.date(2021, 1, 4)))
         assert year.path == tmp_path / '2021/2021.md'
 
     def test_parse_valid(self, tmp_path):
         logbook_path = create_logbook_files(tmp_path)
-        year = Year(Day(logbook_path, DATE_1))
-        assert year.months == [Month(Day(logbook_path, datetime.date(2021, 8, 20))),
-                               Month(Day(logbook_path, datetime.date(2021, 9, 19)))]
-        assert year.days == [Day(logbook_path, datetime.date(2021, 8, 20)),
-                             Day(logbook_path, datetime.date(2021, 9, 19))]
+        year = Year(Day(logbook_path, DATE_2))
+        assert year.months == [Month(Day(logbook_path, DATE_2)),
+                               Month(Day(logbook_path, DATE_3))]
+        assert year.days == [Day(logbook_path, DATE_2),
+                             Day(logbook_path, DATE_3)]
+        assert year.days[0].next == year.days[1]
+        assert year.days[1].previous == year.days[0]
         result = year.parse()
         assert result.valid
         assert not result.errors
+
+    def test_parse_invalid_missing_day_header(self, tmp_path):
+        def remove_header(day_text):
+            return re.sub(r'^# .*?\n', '', day_text)
+
+        logbook_path = create_logbook_files(tmp_path, remove_header)
+        day = Day(logbook_path, DATE_1)
+        result = Year(day).parse()
+        assert ParseError(day.path, 'Missing header') in result.errors
 
 
 class TestMonth:
@@ -84,6 +104,13 @@ class TestMonth:
         assert month1.month == 8
         assert month2 < month1
         assert month1 == Month(Day(tmp_path, datetime.date(2021, 8, 31)))
+
+    def test_equals(self, tmp_path):
+        month1 = Month(Day(tmp_path, DATE_1))
+        month2 = Month(Day(tmp_path, DATE_1))
+        month3 = Month(Day(tmp_path, DATE_2))
+        month2.next = month3
+        assert month1 == month2
 
     def test_hashable(self, tmp_path):
         month1 = Month(Day(tmp_path, datetime.date(2020, 8, 1)))
@@ -98,6 +125,18 @@ class TestMonth:
         month = Month(Day(tmp_path, datetime.date(2021, 1, 4)))
         assert month.name == 'january'
 
+    def test_create_from_files(self, tmp_path):
+        logbook_path = create_logbook_files(tmp_path)
+        all_months = Month.create(logbook_path)
+        assert all_months == [Month(Day(logbook_path, DATE_1)), Month(Day(logbook_path, DATE_2)),
+                              Month(Day(logbook_path, DATE_3))]
+        assert all_months[0].previous is None
+        assert all_months[1].previous == all_months[0]
+        assert all_months[2].previous == all_months[1]
+        assert all_months[0].next == all_months[1]
+        assert all_months[1].next == all_months[2]
+        assert all_months[2].next is None
+
     def test_parse_valid(self, tmp_path):
         logbook_path = create_logbook_files(tmp_path)
         month = Month(Day(logbook_path, DATE_1))
@@ -109,23 +148,25 @@ class TestMonth:
 
 class TestDay:
     def test_dataclass(self, tmp_path):
-        day1 = Day(tmp_path, datetime.date(2021, 8, 20))
-        day2 = Day(tmp_path, datetime.date(2019, 12, 1))
+        day1 = Day(tmp_path, DATE_2)
+        day2 = Day(tmp_path, DATE_1)
         assert day1.root == day2.root == tmp_path
         assert day1.year == 2021
         assert day1.month == 8
         assert day1.day == 20
         assert day2 < day1
-        assert day1 == Day(tmp_path, datetime.date(2021, 8, 20))
+        assert day1 == Day(tmp_path, DATE_2)
 
     def test_create_from_files(self, tmp_path):
         logbook_path = create_logbook_files(tmp_path)
         all_days = Day.create(logbook_path)
-        assert all_days == [Day(logbook_path, DATE_1), Day(logbook_path, DATE_2)]
+        assert all_days == [Day(logbook_path, DATE_1), Day(logbook_path, DATE_2), Day(logbook_path, DATE_3)]
         assert all_days[0].previous is None
         assert all_days[1].previous == all_days[0]
+        assert all_days[2].previous == all_days[1]
         assert all_days[0].next == all_days[1]
-        assert all_days[1].next is None
+        assert all_days[1].next == all_days[2]
+        assert all_days[2].next is None
 
     def test_path(self, tmp_path):
         day = Day(tmp_path, datetime.date(2021, 1, 4))
@@ -133,8 +174,8 @@ class TestDay:
 
     def test_parse_valid(self, tmp_path):
         logbook_path = create_logbook_files(tmp_path)
-        day = Day(logbook_path, DATE_1)
-        day.next = Day(logbook_path, DATE_2)
+        day = Day(logbook_path, DATE_2)
+        day.next = Day(logbook_path, DATE_3)
         result = day.parse()
         assert result.valid
         assert not result.errors
@@ -154,15 +195,6 @@ class TestDay:
         result = day.parse()
         assert ParseError(day.path, 'Missing footer') in result.errors
 
-    def test_parse_invalid_missing_header(self, tmp_path):
-        def remove_header(day_text):
-            return re.sub(r'^# .*?\n', '', day_text)
-
-        logbook_path = create_logbook_files(tmp_path, remove_header)
-        day = Day(logbook_path, DATE_1)
-        result = day.parse()
-        assert ParseError(day.path, 'Missing header') in result.errors
-
 
 class TestDayHeader:
     def test_dataclass(self, tmp_path):
@@ -176,12 +208,17 @@ class TestDayHeader:
         logbook_path = create_logbook_files(tmp_path)
         day1 = Day(logbook_path, DATE_1)
         day2 = Day(logbook_path, DATE_2)
+        day3 = Day(logbook_path, DATE_3)
         day1.next = day2
         day2.previous = day1
+        day2.next = day3
+        day3.previous = day2
         header1 = DayHeader(day1)
         header2 = DayHeader(day2)
+        header3 = DayHeader(day3)
         assert not header1.parse().errors
         assert not header2.parse().errors
+        assert not header3.parse().errors
 
     def test_invalid_missing_h1(self, tmp_path):
         def remove_h1(day_text):
@@ -220,7 +257,7 @@ class TestDayHeader:
         day = Day(logbook_path, DATE_1)
         day.next = Day(logbook_path, DATE_2)
         header = DayHeader(day)
-        assert header.template == '# ◀ [2021-08-20](../../2021.md#august) [▶](../../09/19/20210919.md)'
+        assert header.template == '# ◀ [2020-08-20](../../2020.md#august) [▶](../../../2021/08/20/20210820.md)'
 
 
 class TestFooter:

@@ -7,8 +7,7 @@ from functools import cached_property, lru_cache
 from itertools import pairwise
 from os.path import relpath
 from pathlib import Path
-from typing import List, TypeVar, Generic, final, Pattern, ClassVar, Union, Iterable, Any, Dict, \
-    Optional
+from typing import List, TypeVar, Generic, final, Pattern, ClassVar, Union
 
 from lxml import html
 from lxml.html import HtmlElement
@@ -71,15 +70,15 @@ class Parsable(metaclass=ABCMeta):
             pass
 
 
-@dataclass(order=True)
+@dataclass(unsafe_hash=True, order=True)
 class Day(Parsable):
-    root: Path
-    year: int = field(init=False)
-    month: int = field(init=False)
-    day: int = field(init=False)
+    root: Path = field(hash=True, repr=False)
+    year: int = field(init=False, hash=True)
+    month: int = field(init=False, hash=True)
+    day: int = field(init=False, hash=True)
     date: InitVar[datetime.date]
-    previous: 'Day' = field(compare=False, init=False, default=None)
-    next: 'Day' = field(compare=False, init=False, default=None)
+    previous: 'Day' = field(compare=False, init=False, default=None, hash=False, repr=False)
+    next: 'Day' = field(compare=False, init=False, default=None, hash=False, repr=False)
 
     PATH_PATTERN: ClassVar[Pattern] = re.compile(r'^.*?(?P<yyyy>[0-9]{4}).'
                                                  r'(?P<mm>[0-9]{2}).'
@@ -96,45 +95,43 @@ class Day(Parsable):
         yyyy, mm, dd = f'{self.year:04d}', f'{self.month:02d}', f'{self.day:02d}'
         return self.root / yyyy / mm / dd / f'{yyyy}{mm}{dd}.md'
 
+    @cached_property
+    def headers(self):
+        return [DayHeader(self)]
+
     @staticmethod
     @lru_cache
     def create(root: Path) -> List['Day']:
-        def date(path: Path):
-            return datetime.date(int(path.name[0:4]), int(path.name[4:6]), int(path.name[6:8]))
+        def day(path: Path):
+            return Day(root, datetime.date(int(path.name[0:4]), int(path.name[4:6]), int(path.name[6:8])))
 
-        dates = list(map(date, filter(lambda p: Day.PATH_PATTERN.match(p.as_posix()), sorted(root.rglob('*.md')))))
-        dates.insert(0, None)
-        dates.append(None)
+        days = list(map(day, filter(lambda p: Day.PATH_PATTERN.match(p.as_posix()), sorted(root.rglob('*.md')))))
 
-        days_per_date: Dict[Optional[datetime.date], Optional[Day]] = {None: None}
+        for prv, cur in pairwise(days):
+            prv.next = cur
+            cur.previous = prv
 
-        for prv, cur, nxt in triplewise(dates):
-            days_per_date.setdefault(prv, Day(root, prv) if prv else None)
-            days_per_date.setdefault(cur, Day(root, cur))
-            days_per_date.setdefault(nxt, Day(root, nxt) if nxt else None)
-            days_per_date[cur].previous = days_per_date[prv]
-            days_per_date[cur].next = days_per_date[nxt]
-
-        return list(map(days_per_date.get, filter(None, dates)))
+        return days
 
     class Parser(Parsable.Parser['Day']):
         def parse(self) -> ParseResult:
             self.result.reset()
             if not self.context.path.exists():
                 return self.result.add_error(self.context.path, 'Markdown file does not exist')
-            self.result.update(DayHeader(self.context).parse())
             return self.result.update(Footer(self.context).parse())
 
 
-@dataclass(frozen=True, order=True)
+@dataclass(unsafe_hash=True, order=True)
 class Year(Parsable):
-    root: Path = field(init=False)
-    year: int = field(init=False)
+    root: Path = field(init=False, hash=True, compare=True, repr=False)
+    year: int = field(init=False, hash=True, compare=True)
     day: InitVar[Day]
+    previous: 'Year' = field(compare=False, init=False, hash=False, default=None, repr=False)
+    next: 'Year' = field(compare=False, init=False, hash=False, default=None, repr=False)
 
     def __post_init__(self, day: Day):
-        object.__setattr__(self, 'root', day.root)
-        object.__setattr__(self, 'year', day.year)
+        self.root = day.root
+        self.year = day.year
 
     @cached_property
     def path(self) -> Path:
@@ -143,28 +140,45 @@ class Year(Parsable):
 
     @cached_property
     def months(self) -> List['Month']:
-        return sorted({Month(d) for d in self.days})
+        return [m for m in Month.create(self.root) if m.year == self.year]
 
     @cached_property
     def days(self) -> List['Day']:
         return [d for d in Day.create(self.root) if d.year == self.year]
 
+    @staticmethod
+    def create(root: Path):
+        years = sorted({Year(d) for d in Day.create(root)})
+        for prv, cur in pairwise(years):
+            prv.next = cur
+            cur.previous = prv
+        return years
+
     class Parser(Parsable.Parser['Year']):
         def parse(self) -> ParseResult:
-            return self.result.reset()
+            self.result.reset()
+            for m in self.context.months:
+                self.result.update(m.parse())
+            for d in self.context.days:
+                self.result.update(d.parse())
+                for h in d.headers:
+                    self.result.update(h.parse())
+            return self.result
 
 
-@dataclass(frozen=True, order=True)
+@dataclass(unsafe_hash=True, order=True)
 class Month(Parsable):
-    root: Path = field(init=False)
-    year: int = field(init=False)
-    month: int = field(init=False)
+    root: Path = field(init=False, hash=True, repr=False)
+    year: int = field(init=False, hash=True)
+    month: int = field(init=False, hash=True)
     day: InitVar[Day]
+    previous: 'Month' = field(compare=False, init=False, hash=False, default=None, repr=False)
+    next: 'Month' = field(compare=False, init=False, hash=False, default=None, repr=False)
 
     def __post_init__(self, day: Day):
-        object.__setattr__(self, 'root', day.root)
-        object.__setattr__(self, 'year', day.year)
-        object.__setattr__(self, 'month', day.month)
+        self.root = day.root
+        self.year = day.year
+        self.month = day.month
 
     @cached_property
     def path(self) -> Path:
@@ -177,7 +191,15 @@ class Month(Parsable):
 
     @cached_property
     def days(self) -> List['Day']:
-        return [d for d in Day.create(self.root) if d.month == self.month]
+        return [d for d in Day.create(self.root) if d.year == self.year and d.month == self.month]
+
+    @staticmethod
+    def create(root: Path) -> List['Month']:
+        months = sorted({Month(d) for d in Day.create(root)})
+        for prv, cur in pairwise(months):
+            prv.next = cur
+            cur.previous = prv
+        return months
 
     class Parser(Parsable.Parser['Month']):
         def parse(self) -> ParseResult:
@@ -198,14 +220,12 @@ class Logbook(Parsable):
 
     class Parser(Parsable.Parser['Logbook']):
         def parse(self) -> ParseResult:
-            return self.result.reset()
-
-
-@dataclass(frozen=True, order=True)
-class InternalLink:
-    source: Path
-    destination: Path
-    fragment: str = None
+            self.result.reset()
+            if not (self.context.path.parent / 'style.css').exists():
+                self.result.add_error(self.context.path.parent, 'Missing style.css')
+            for y in self.context.years:
+                self.result.update(y.parse())
+            return self.result
 
 
 @dataclass(order=True)
@@ -284,10 +304,3 @@ def parse_markdown_element(string: str) -> HtmlElement:
 
 def html_to_string(element: HtmlElement) -> str:
     return html.tostring(element, encoding='unicode').strip()
-
-
-def triplewise(iterable: Iterable[Any]):
-    """Return overlapping triplets from an iterable"""
-    # triplewise('ABCDEFG') -> ABC BCD CDE DEF EFG
-    for (a, _), (b, c) in pairwise(pairwise(iterable)):
-        yield a, b, c
