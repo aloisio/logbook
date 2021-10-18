@@ -121,6 +121,8 @@ class Day(Parsable):
             self.result.reset()
             if not self.context.path.exists():
                 return self.result.add_error(self.context.path, 'Markdown file does not exist')
+            for h in self.context.headers:
+                self.result.update(h.parse())
             return self.result.update(Footer(self.context).parse())
 
 
@@ -168,8 +170,6 @@ class Year(Parsable):
                 self.result.update(m.parse())
             for d in self.context.days:
                 self.result.update(d.parse())
-                for h in d.headers:
-                    self.result.update(h.parse())
             if self.result.valid:
                 self.context.path.touch(exist_ok=True)
                 self.context.path.write_text(self.context.footer.template)
@@ -227,6 +227,14 @@ class Month(Parsable):
         week_headers = next(islice(table.iter('tr'), 1, None), [])
         for th in week_headers:
             th.text = th.text[0:2]
+        days = {str(d.day): d for d in self.days}
+        for td in table.iter('td'):
+            if td.text in days:
+                href = relpath(days[td.text].path, self.path.parent)
+                a = html.fragment_fromstring(f'<a href={href}>{td.text}</a>')
+                td.text = None
+                td.append(a)
+
         return '\n'.join([
             html_to_string(table),
             self.footer.template,
@@ -288,10 +296,17 @@ class DayHeader(Parsable):
 
     @cached_property
     def template(self) -> str:
-        backward = '◀' if self.day.previous is None else f'[◀]({relpath(self.day.previous.path, self.day.path.parent)})'
-        forward = '▶' if self.day.next is None else f'[▶]({relpath(self.day.next.path, self.day.path.parent)})'
+        def backward_href():
+            return relpath(self.day.previous.path, self.day.path.parent)
+
+        def forward_href():
+            return relpath(self.day.next.path, self.day.path.parent)
+
+        backward = '◀' if self.day.previous is None else f'[◀]({backward_href()})'
+        forward = '▶' if self.day.next is None else f'[▶]({forward_href()})'
         up_text = f'{self.day.year:04d}-{self.day.month:02d}-{self.day.day:02d}'
-        upward = f'[{up_text}]({relpath(Year(self.day).path, self.day.path.parent)}#{Month(self.day).name})'
+        up_href = f'{relpath(Year(self.day).path, self.day.path.parent)}#{Month(self.day).name}'
+        upward = f'[{up_text}]({up_href})'
         return f'# {backward} {upward} {forward}'
 
     class Parser(Parsable.Parser['DayHeader']):
@@ -302,24 +317,30 @@ class DayHeader(Parsable):
                 return self.result.add_error(self.context.path, 'Missing header', self.context.template)
             if len(h1s) > 1:
                 self.result.add_error(self.context.path, 'Multiple headers')
-            if h1s[0].getprevious() is not None:
+            if (actual := h1s[0]).getprevious() is not None:
                 self.result.add_error(self.context.path, 'Header is not first element')
             expected = parse_markdown_element(self.context.template)
-            if html_to_string(expected) != html_to_string(h1s[0]):
+            if html_to_string(expected) != html_to_string(actual):
                 self.result.add_error(self.context.path, 'Header content problem', self.context.template)
             return self.result
 
 
 @dataclass
-class MonthHeader():
+class MonthHeader:
     month: Month
 
     @property
     def template(self) -> str:
+        def backward_href():
+            return relpath(self.month.previous.path, self.month.path.parent)
+
+        def forward_href():
+            return relpath(self.month.next.path, self.month.path.parent)
+
         yyyy = f'{self.month.year:04d}'
         mm = f'{self.month.month:02d}'
-        backward = f'<a href={relpath(self.month.previous.path, self.month.path.parent)}>◀</a>' if self.month.previous else '◀'
-        forward = f'<a href={relpath(self.month.next.path, self.month.path.parent)}>▶</a>' if self.month.next else '▶'
+        backward = f'<a href={backward_href()}>◀</a>' if self.month.previous else '◀'
+        forward = f'<a href={forward_href()}>▶</a>' if self.month.next else '▶'
         upward = f'<a href=../{yyyy}.md#{self.month.name}>{yyyy}-{mm}</a>'
         return f'<th colspan=7>{backward} {upward} {forward}</th>'
 

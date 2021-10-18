@@ -189,6 +189,8 @@ class TestMonth:
         assert month_links[0].attrib['href'] == '../2020.md#august'
         assert month_links[1].text == '▶'
         assert month_links[1].attrib['href'] == '../../2021/08/202108.md'
+        assert month_links[2].text == '20'
+        assert month_links[2].attrib['href'] == '20/20200820.md'
 
 
 class TestDay:
@@ -220,6 +222,7 @@ class TestDay:
     def test_parse_valid(self, tmp_path):
         logbook_path = create_logbook_files(tmp_path)
         day = Day(logbook_path, DATE_2)
+        day.previous = Day(logbook_path, DATE_1)
         day.next = Day(logbook_path, DATE_3)
         result = day.parse()
         assert result.valid
