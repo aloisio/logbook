@@ -21,6 +21,9 @@ class ParseError:
     message: str
     hint: str = field(default=None, compare=False)
 
+    def __repr__(self) -> str:
+        return f'ParseError(path={repr(self.path.name)}, message={repr(self.message)})'
+
 
 @dataclass(frozen=True)
 class ParseResult:
@@ -146,6 +149,10 @@ class Year(Parsable):
     def days(self) -> List['Day']:
         return [d for d in Day.create(self.root) if d.year == self.year]
 
+    @cached_property
+    def footer(self) -> 'Footer':
+        return Footer(self)
+
     @staticmethod
     def create(root: Path):
         years = sorted({Year(d) for d in Day.create(root)})
@@ -163,6 +170,10 @@ class Year(Parsable):
                 self.result.update(d.parse())
                 for h in d.headers:
                     self.result.update(h.parse())
+            if self.result.valid:
+                self.context.path.touch(exist_ok=True)
+                self.context.path.write_text(self.context.footer.template)
+
             return self.result
 
 
@@ -190,6 +201,10 @@ class Month(Parsable):
         return month_name[self.month].lower()
 
     @cached_property
+    def footer(self) -> 'Footer':
+        return Footer(self)
+
+    @cached_property
     def days(self) -> List['Day']:
         return [d for d in Day.create(self.root) if d.year == self.year and d.month == self.month]
 
@@ -203,7 +218,10 @@ class Month(Parsable):
 
     class Parser(Parsable.Parser['Month']):
         def parse(self) -> ParseResult:
-            return self.result.reset()
+            self.result.reset()
+            self.context.path.touch(exist_ok=True)
+            self.context.path.write_text(self.context.footer.template)
+            return self.result
 
 
 @dataclass(order=True)
@@ -218,6 +236,10 @@ class Logbook(Parsable):
     def years(self) -> List[Year]:
         return sorted({Year(d) for d in Day.create(self.root)})
 
+    @cached_property
+    def footer(self) -> 'Footer':
+        return Footer(self)
+
     class Parser(Parsable.Parser['Logbook']):
         def parse(self) -> ParseResult:
             self.result.reset()
@@ -225,6 +247,9 @@ class Logbook(Parsable):
                 self.result.add_error(self.context.path.parent, 'Missing style.css')
             for y in self.context.years:
                 self.result.update(y.parse())
+            if self.result.valid:
+                self.context.path.touch(exist_ok=True)
+                self.context.path.write_text(self.context.footer.template)
             return self.result
 
 

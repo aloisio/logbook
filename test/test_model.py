@@ -14,6 +14,12 @@ DATE_3 = datetime.date(2021, 9, 19)
 
 DAY_1_RELATIVE_PATH = '2020/08/20/20200820.md'
 
+MONTH_1_RELATIVE_PATH = '2020/08/202008.md'
+
+YEAR_1_RELATIVE_PATH = '2020/2020.md'
+
+YEAR_2_RELATIVE_PATH = '2021/2021.md'
+
 TEST_ROOT = Path(__file__).parent
 
 
@@ -36,6 +42,13 @@ class TestLogbook:
         assert logbook.years == [Year(Day(logbook_path, DATE_1)), Year(Day(logbook_path, DATE_2))]
         assert result.valid
         assert not result.errors
+        assert (logbook_path / 'index.md').exists(), 'Should create index'
+
+    def test_parse_valid_creates_footer(self, tmp_path):
+        logbook_path = create_logbook_files(tmp_path)
+        logbook = Logbook(logbook_path)
+        assert not logbook.parse().errors
+        assert not Footer(logbook).parse().errors, 'Should create valid footer'
 
     def test_parse_invalid_missing_stylesheet(self, tmp_path):
         logbook_path = create_logbook_files(tmp_path)
@@ -69,8 +82,8 @@ class TestYear:
         assert all_years[1].next is None
 
     def test_path(self, tmp_path):
-        year = Year(Day(tmp_path, datetime.date(2021, 1, 4)))
-        assert year.path == tmp_path / '2021/2021.md'
+        year = Year(Day(tmp_path, DATE_1))
+        assert year.path == tmp_path / YEAR_1_RELATIVE_PATH
 
     def test_parse_valid(self, tmp_path):
         logbook_path = create_logbook_files(tmp_path)
@@ -84,6 +97,13 @@ class TestYear:
         result = year.parse()
         assert result.valid
         assert not result.errors
+        assert (logbook_path / YEAR_2_RELATIVE_PATH).exists(), 'Should create year summary'
+
+    def test_parse_valid_creates_footer(self, tmp_path):
+        logbook_path = create_logbook_files(tmp_path)
+        year = Year(Day(logbook_path, DATE_1))
+        assert not year.parse().errors
+        assert not Footer(year).parse().errors, 'Should create valid footer'
 
     def test_parse_invalid_missing_day_header(self, tmp_path):
         def remove_header(day_text):
@@ -118,8 +138,8 @@ class TestMonth:
         assert {month1, month2} == {Month(Day(tmp_path, datetime.date(2020, 8, 8)))}
 
     def test_path(self, tmp_path):
-        month = Month(Day(tmp_path, datetime.date(2021, 1, 4)))
-        assert month.path == tmp_path / '2021/01/202101.md'
+        month = Month(Day(tmp_path, DATE_1))
+        assert month.path == tmp_path / MONTH_1_RELATIVE_PATH
 
     def test_name(self, tmp_path):
         month = Month(Day(tmp_path, datetime.date(2021, 1, 4)))
@@ -144,6 +164,13 @@ class TestMonth:
         assert month.days == [Day(logbook_path, DATE_1)]
         assert result.valid
         assert not result.errors
+        assert (logbook_path / MONTH_1_RELATIVE_PATH).exists(), 'Should create month summary'
+
+    def test_parse_valid_creates_footer(self, tmp_path):
+        logbook_path = create_logbook_files(tmp_path)
+        month = Month(Day(logbook_path, DATE_1))
+        assert not month.parse().errors
+        assert not Footer(month).parse().errors
 
 
 class TestDay:
@@ -169,8 +196,8 @@ class TestDay:
         assert all_days[2].next is None
 
     def test_path(self, tmp_path):
-        day = Day(tmp_path, datetime.date(2021, 1, 4))
-        assert day.path == tmp_path / '2021/01/04/20210104.md'
+        day = Day(tmp_path, DATE_1)
+        assert day.path == tmp_path / DAY_1_RELATIVE_PATH
 
     def test_parse_valid(self, tmp_path):
         logbook_path = create_logbook_files(tmp_path)
