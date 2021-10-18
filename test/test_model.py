@@ -4,7 +4,7 @@ import shutil
 from pathlib import Path
 from typing import Callable
 
-from model import Logbook, Year, Month, Day, ParseError, Footer, DayHeader
+from model import Logbook, Year, Month, Day, ParseError, Footer, DayHeader, parse_markdown, parse_markdown_element
 
 DATE_1 = datetime.date(2020, 8, 20)
 
@@ -170,7 +170,25 @@ class TestMonth:
         logbook_path = create_logbook_files(tmp_path)
         month = Month(Day(logbook_path, DATE_1))
         assert not month.parse().errors
-        assert not Footer(month).parse().errors
+        assert not Footer(month).parse().errors, 'Should create valid footer'
+
+    def test_parse_valid_creates_calendar_table(self, tmp_path):
+        logbook_path = create_logbook_files(tmp_path)
+        month = Month(Day(logbook_path, DATE_1))
+        month.next = Month(Day(logbook_path, DATE_2))
+        assert not month.parse().errors
+        tree = parse_markdown(month.path)
+        table = tree[0]
+        assert table.tag == 'table', 'Calendar table is first element'
+        assert table.attrib['class'] == 'month'
+        assert not set(table.attrib.keys()).intersection({'border', 'cellpadding', 'cellspacing'})
+        assert not list(filter(None, [c.attrib.get('class', None) for c in table.iter('td', 'th')]))
+        assert ''.join(list(table.iter('tr'))[1].text_content().split()) == 'MoTuWeThFrSaSu'
+        month_links = table.findall('.//a')
+        assert month_links[0].text == '2020-08'
+        assert month_links[0].attrib['href'] == '../2020.md#august'
+        assert month_links[1].text == '▶'
+        assert month_links[1].attrib['href'] == '../../2021/08/202108.md'
 
 
 class TestDay:
@@ -285,6 +303,72 @@ class TestDayHeader:
         day.next = Day(logbook_path, DATE_2)
         header = DayHeader(day)
         assert header.template == '# ◀ [2020-08-20](../../2020.md#august) [▶](../../../2021/08/20/20210820.md)'
+
+
+class TestMonthHeader:
+    def test_template_structure(self, tmp_path):
+        logbook_path = create_logbook_files(tmp_path)
+        month = Month(Day(logbook_path, DATE_1))
+        assert not month.parse().errors
+        th = parse_markdown_element(month.header.template)
+        assert th.text_content() == '◀ 2020-08 ▶'
+        assert th.attrib['colspan'] == '7'
+
+    def test_template_only_month(self, tmp_path):
+        logbook_path = create_logbook_files(tmp_path)
+        month = Month(Day(logbook_path, DATE_1))
+        assert not month.parse().errors
+        th = parse_markdown_element(month.header.template)
+        assert th.text_content() == '◀ 2020-08 ▶'
+        a = next(th.iter('a'), None)
+        assert a is not None
+        assert a.text_content() == '2020-08'
+        assert a.attrib['href'] == '../2020.md#august'
+
+    def test_template_first_month(self, tmp_path):
+        logbook_path = create_logbook_files(tmp_path)
+        month = Month(Day(logbook_path, DATE_2))
+        month.previous = Month(Day(logbook_path, DATE_1))
+        assert not month.parse().errors
+        th = parse_markdown_element(month.header.template)
+        assert th.text_content() == '◀ 2021-08 ▶'
+        a = list(th.iter('a'))
+        assert len(a) == 2
+        assert a[0].text_content() == '◀'
+        assert a[0].attrib['href'] == '../../2020/08/202008.md'
+        assert a[1].text_content() == '2021-08'
+        assert a[1].attrib['href'] == '../2021.md#august'
+
+    def test_template_middle_month(self, tmp_path):
+        logbook_path = create_logbook_files(tmp_path)
+        month = Month(Day(logbook_path, DATE_2))
+        month.previous = Month(Day(logbook_path, DATE_1))
+        month.next = Month(Day(logbook_path, DATE_3))
+        assert not month.parse().errors
+        th = parse_markdown_element(month.header.template)
+        assert th.text_content() == '◀ 2021-08 ▶'
+        a = list(th.iter('a'))
+        assert len(a) == 3
+        assert a[0].text_content() == '◀'
+        assert a[0].attrib['href'] == '../../2020/08/202008.md'
+        assert a[1].text_content() == '2021-08'
+        assert a[1].attrib['href'] == '../2021.md#august'
+        assert a[2].text_content() == '▶'
+        assert a[2].attrib['href'] == '../09/202109.md'
+
+    def test_template_last_month(self, tmp_path):
+        logbook_path = create_logbook_files(tmp_path)
+        month = Month(Day(logbook_path, DATE_2))
+        month.next = Month(Day(logbook_path, DATE_3))
+        assert not month.parse().errors
+        th = parse_markdown_element(month.header.template)
+        assert th.text_content() == '◀ 2021-08 ▶'
+        a = list(th.iter('a'))
+        assert len(a) == 2
+        assert a[0].text_content() == '2021-08'
+        assert a[0].attrib['href'] == '../2021.md#august'
+        assert a[1].text_content() == '▶'
+        assert a[1].attrib['href'] == '../09/202109.md'
 
 
 class TestFooter:

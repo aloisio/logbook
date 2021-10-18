@@ -1,10 +1,10 @@
 import datetime
 import re
 from abc import ABCMeta, abstractmethod
-from calendar import month_name
+from calendar import month_name, HTMLCalendar
 from dataclasses import dataclass, field, InitVar
 from functools import cached_property, lru_cache
-from itertools import pairwise
+from itertools import pairwise, islice
 from os.path import relpath
 from pathlib import Path
 from typing import List, TypeVar, Generic, final, Pattern, ClassVar, Union
@@ -201,12 +201,37 @@ class Month(Parsable):
         return month_name[self.month].lower()
 
     @cached_property
+    def header(self) -> 'MonthHeader':
+        return MonthHeader(self)
+
+    @cached_property
     def footer(self) -> 'Footer':
         return Footer(self)
 
     @cached_property
     def days(self) -> List['Day']:
         return [d for d in Day.create(self.root) if d.year == self.year and d.month == self.month]
+
+    @cached_property
+    def template(self) -> str:
+        table = html.fragment_fromstring(HTMLCalendar().formatmonth(self.year, self.month))
+        table.attrib.pop('border', None)
+        table.attrib.pop('cellpadding', None)
+        table.attrib.pop('cellspacing', None)
+        for e in table.iter('th', 'td'):
+            e.attrib.pop('class', None)
+        month_header = parse_markdown_element(self.header.template)
+        month_header_row = next(table.iter('tr'), None)
+        month_header_row.clear()
+        month_header_row.append(month_header)
+        week_headers = next(islice(table.iter('tr'), 1, None), [])
+        for th in week_headers:
+            th.text = th.text[0:2]
+        return '\n'.join([
+            html_to_string(table),
+            self.footer.template,
+            ''
+        ])
 
     @staticmethod
     def create(root: Path) -> List['Month']:
@@ -220,7 +245,7 @@ class Month(Parsable):
         def parse(self) -> ParseResult:
             self.result.reset()
             self.context.path.touch(exist_ok=True)
-            self.context.path.write_text(self.context.footer.template)
+            self.context.path.write_text(self.context.template)
             return self.result
 
 
@@ -285,6 +310,20 @@ class DayHeader(Parsable):
             return self.result
 
 
+@dataclass
+class MonthHeader():
+    month: Month
+
+    @property
+    def template(self) -> str:
+        yyyy = f'{self.month.year:04d}'
+        mm = f'{self.month.month:02d}'
+        backward = f'<a href={relpath(self.month.previous.path, self.month.path.parent)}>◀</a>' if self.month.previous else '◀'
+        forward = f'<a href={relpath(self.month.next.path, self.month.path.parent)}>▶</a>' if self.month.next else '▶'
+        upward = f'<a href=../{yyyy}.md#{self.month.name}>{yyyy}-{mm}</a>'
+        return f'<th colspan=7>{backward} {upward} {forward}</th>'
+
+
 @dataclass(order=True)
 class Footer(Parsable):
     container: Union[Logbook, Year, Month, Day]
@@ -328,4 +367,4 @@ def parse_markdown_element(string: str) -> HtmlElement:
 
 
 def html_to_string(element: HtmlElement) -> str:
-    return html.tostring(element, encoding='unicode').strip()
+    return html.tostring(element, encoding='unicode', pretty_print=True).strip()
