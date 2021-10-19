@@ -152,6 +152,51 @@ class Year(Parsable):
         return [d for d in Day.create(self.root) if d.year == self.year]
 
     @cached_property
+    def template(self) -> str:
+        table = html.fragment_fromstring(HTMLCalendar().formatyear(self.year))
+        for t in [table] + table.findall('.//table'):
+            t.attrib.pop('border', None)
+            t.attrib.pop('cellpadding', None)
+            t.attrib.pop('cellspacing', None)
+        for e in table.iter('th', 'td'):
+            e.attrib.pop('class', None)
+        months = {m.name: m for m in self.months}
+        for month_table in table.findall('.//table'):
+            rows = month_table.iter('tr')
+            month_header_row = next(rows, None)
+            month_header = next(month_header_row.iter('th'), HtmlElement())
+            if (month_key := month_header.text.lower()) in months:
+                month_href = relpath(months[month_key].path, self.path.parent)
+                month_link = _a(month_href, month_header.text)
+                month_header.clear()
+                month_header.attrib['colspan'] = '7'
+                month_header.append(month_link)
+                days = {str(d.day): d for d in months[month_key].days}
+                for day_cell in [td for td in month_table.findall('.//td') if td.text in days]:
+                    day_href = relpath(days[day_cell.text].path, self.path.parent)
+                    day_link = _a(day_href, day_cell.text)
+                    day_cell.clear()
+                    day_cell.append(day_link)
+                    month_table.getparent().attrib['id'] = months[month_key].name
+            week_headers = next(rows, [])
+            for th in week_headers:
+                th.text = th.text[0:2]
+
+        year_header = parse_markdown_element(self.header.template)
+        year_header_row = next(table.iter('tr'), None)
+        year_header_row.clear()
+        year_header_row.append(year_header)
+        return '\n'.join([
+            html_to_string(table),
+            self.footer.template,
+            ''
+        ])
+
+    @cached_property
+    def header(self) -> 'YearHeader':
+        return YearHeader(self)
+
+    @cached_property
     def footer(self) -> 'Footer':
         return Footer(self)
 
@@ -172,8 +217,7 @@ class Year(Parsable):
                 self.result.update(d.parse())
             if self.result.valid:
                 self.context.path.touch(exist_ok=True)
-                self.context.path.write_text(self.context.footer.template)
-
+                self.context.path.write_text(self.context.template)
             return self.result
 
 
@@ -228,12 +272,11 @@ class Month(Parsable):
         for th in week_headers:
             th.text = th.text[0:2]
         days = {str(d.day): d for d in self.days}
-        for td in table.iter('td'):
-            if td.text in days:
-                href = relpath(days[td.text].path, self.path.parent)
-                a = html.fragment_fromstring(f'<a href={href}>{td.text}</a>')
-                td.text = None
-                td.append(a)
+        for day_cell in [td for td in table.iter('td') if td.text in days]:
+            href = relpath(days[day_cell.text].path, self.path.parent)
+            day_link = _a(href, day_cell.text)
+            day_cell.clear()
+            day_cell.append(day_link)
 
         return '\n'.join([
             html_to_string(table),
@@ -345,6 +388,25 @@ class MonthHeader:
         return f'<th colspan=7>{backward} {upward} {forward}</th>'
 
 
+@dataclass
+class YearHeader:
+    year: Year
+
+    @property
+    def template(self) -> str:
+        def backward_href():
+            return relpath(self.year.previous.path, self.year.path.parent)
+
+        def forward_href():
+            return relpath(self.year.next.path, self.year.path.parent)
+
+        yyyy = f'{self.year.year:04d}'
+        backward = f'<a href={backward_href()}>◀</a>' if self.year.previous else '◀'
+        forward = f'<a href={forward_href()}>▶</a>' if self.year.next else '▶'
+        upward = f'<a href=../index.md>{yyyy}</a>'
+        return f'<th colspan=3>{backward} {upward} {forward}</th>'
+
+
 @dataclass(order=True)
 class Footer(Parsable):
     container: Union[Logbook, Year, Month, Day]
@@ -389,3 +451,11 @@ def parse_markdown_element(string: str) -> HtmlElement:
 
 def html_to_string(element: HtmlElement) -> str:
     return html.tostring(element, encoding='unicode', pretty_print=True).strip()
+
+
+def _a(href: str, text: str):
+    element = HtmlElement()
+    element.tag = 'a'
+    element.attrib['href'] = href
+    element.text = text
+    return element
