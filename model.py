@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import List, TypeVar, Generic, final, Pattern, ClassVar, Union
 
 from lxml import html
+from lxml.builder import E
 from lxml.html import HtmlElement
 from lxml.html.soupparser import fromstring
 from markdown import markdown
@@ -127,101 +128,6 @@ class Day(Parsable):
 
 
 @dataclass(unsafe_hash=True, order=True)
-class Year(Parsable):
-    root: Path = field(init=False, hash=True, compare=True, repr=False)
-    year: int = field(init=False, hash=True, compare=True)
-    day: InitVar[Day]
-    previous: 'Year' = field(compare=False, init=False, hash=False, default=None, repr=False)
-    next: 'Year' = field(compare=False, init=False, hash=False, default=None, repr=False)
-
-    def __post_init__(self, day: Day):
-        self.root = day.root
-        self.year = day.year
-
-    @cached_property
-    def path(self) -> Path:
-        yyyy = f'{self.year:04d}'
-        return self.root / yyyy / f'{yyyy}.md'
-
-    @cached_property
-    def months(self) -> List['Month']:
-        return [m for m in Month.create(self.root) if m.year == self.year]
-
-    @cached_property
-    def days(self) -> List['Day']:
-        return [d for d in Day.create(self.root) if d.year == self.year]
-
-    @cached_property
-    def template(self) -> str:
-        table = html.fragment_fromstring(HTMLCalendar().formatyear(self.year))
-        for t in [table] + table.findall('.//table'):
-            t.attrib.pop('border', None)
-            t.attrib.pop('cellpadding', None)
-            t.attrib.pop('cellspacing', None)
-        for e in table.iter('th', 'td'):
-            e.attrib.pop('class', None)
-        months = {m.name: m for m in self.months}
-        for month_table in table.findall('.//table'):
-            rows = month_table.iter('tr')
-            month_header_row = next(rows, None)
-            month_header = next(month_header_row.iter('th'), HtmlElement())
-            if (month_key := month_header.text.lower()) in months:
-                month_href = relpath(months[month_key].path, self.path.parent)
-                month_link = _a(month_href, month_header.text)
-                month_header.clear()
-                month_header.attrib['colspan'] = '7'
-                month_header.append(month_link)
-                days = {str(d.day): d for d in months[month_key].days}
-                for day_cell in [td for td in month_table.findall('.//td') if td.text in days]:
-                    day_href = relpath(days[day_cell.text].path, self.path.parent)
-                    day_link = _a(day_href, day_cell.text)
-                    day_cell.clear()
-                    day_cell.append(day_link)
-                    month_table.getparent().attrib['id'] = months[month_key].name
-            week_headers = next(rows, [])
-            for th in week_headers:
-                th.text = th.text[0:2]
-
-        year_header = parse_markdown_element(self.header.template)
-        year_header_row = next(table.iter('tr'), None)
-        year_header_row.clear()
-        year_header_row.append(year_header)
-        return '\n'.join([
-            html_to_string(table),
-            self.footer.template,
-            ''
-        ])
-
-    @cached_property
-    def header(self) -> 'YearHeader':
-        return YearHeader(self)
-
-    @cached_property
-    def footer(self) -> 'Footer':
-        return Footer(self)
-
-    @staticmethod
-    def create(root: Path):
-        years = sorted({Year(d) for d in Day.create(root)})
-        for prv, cur in pairwise(years):
-            prv.next = cur
-            cur.previous = prv
-        return years
-
-    class Parser(Parsable.Parser['Year']):
-        def parse(self) -> ParseResult:
-            self.result.reset()
-            for m in self.context.months:
-                self.result.update(m.parse())
-            for d in self.context.days:
-                self.result.update(d.parse())
-            if self.result.valid:
-                self.context.path.touch(exist_ok=True)
-                self.context.path.write_text(self.context.template)
-            return self.result
-
-
-@dataclass(unsafe_hash=True, order=True)
 class Month(Parsable):
     root: Path = field(init=False, hash=True, repr=False)
     year: int = field(init=False, hash=True)
@@ -274,7 +180,7 @@ class Month(Parsable):
         days = {str(d.day): d for d in self.days}
         for day_cell in [td for td in table.iter('td') if td.text in days]:
             href = relpath(days[day_cell.text].path, self.path.parent)
-            day_link = _a(href, day_cell.text)
+            day_link = E.a(day_cell.text, dict(href=href))
             day_cell.clear()
             day_cell.append(day_link)
 
@@ -300,6 +206,101 @@ class Month(Parsable):
             return self.result
 
 
+@dataclass(unsafe_hash=True, order=True)
+class Year(Parsable):
+    root: Path = field(init=False, hash=True, compare=True, repr=False)
+    year: int = field(init=False, hash=True, compare=True)
+    day: InitVar[Day]
+    previous: 'Year' = field(compare=False, init=False, hash=False, default=None, repr=False)
+    next: 'Year' = field(compare=False, init=False, hash=False, default=None, repr=False)
+
+    def __post_init__(self, day: Day):
+        self.root = day.root
+        self.year = day.year
+
+    @cached_property
+    def path(self) -> Path:
+        yyyy = f'{self.year:04d}'
+        return self.root / yyyy / f'{yyyy}.md'
+
+    @cached_property
+    def months(self) -> List['Month']:
+        return [m for m in Month.create(self.root) if m.year == self.year]
+
+    @cached_property
+    def days(self) -> List['Day']:
+        return [d for d in Day.create(self.root) if d.year == self.year]
+
+    @cached_property
+    def template(self) -> str:
+        table = html.fragment_fromstring(HTMLCalendar().formatyear(self.year))
+        for t in [table] + table.findall('.//table'):
+            t.attrib.pop('border', None)
+            t.attrib.pop('cellpadding', None)
+            t.attrib.pop('cellspacing', None)
+        for e in table.iter('th', 'td'):
+            e.attrib.pop('class', None)
+        months = {m.name: m for m in self.months}
+        for month_table in table.findall('.//table'):
+            rows = month_table.iter('tr')
+            month_header_row = next(rows, None)
+            month_header = next(month_header_row.iter('th'), HtmlElement())
+            if (month_key := month_header.text.lower()) in months:
+                month_href = relpath(months[month_key].path, self.path.parent)
+                month_link = E.a(month_header.text, dict(href=month_href))
+                month_header.clear()
+                month_header.attrib['colspan'] = '7'
+                month_header.append(month_link)
+                days = {str(d.day): d for d in months[month_key].days}
+                for day_cell in [td for td in month_table.findall('.//td') if td.text in days]:
+                    day_href = relpath(days[day_cell.text].path, self.path.parent)
+                    day_link = E.a(day_cell.text, dict(href=day_href))
+                    day_cell.clear()
+                    day_cell.append(day_link)
+                    month_table.getparent().attrib['id'] = months[month_key].name
+            week_headers = next(rows, [])
+            for th in week_headers:
+                th.text = th.text[0:2]
+
+        year_header = parse_markdown_element(self.header.template)
+        year_header_row = next(table.iter('tr'), None)
+        year_header_row.clear()
+        year_header_row.append(year_header)
+        return '\n'.join([
+            html_to_string(table),
+            self.footer.template,
+            ''
+        ])
+
+    @cached_property
+    def header(self) -> 'YearHeader':
+        return YearHeader(self)
+
+    @cached_property
+    def footer(self) -> 'Footer':
+        return Footer(self)
+
+    @staticmethod
+    def create(root: Path):
+        years = sorted({Year(d) for d in Day.create(root)})
+        for prv, cur in pairwise(years):
+            prv.next = cur
+            cur.previous = prv
+        return years
+
+    class Parser(Parsable.Parser['Year']):
+        def parse(self) -> ParseResult:
+            self.result.reset()
+            for m in self.context.months:
+                self.result.update(m.parse())
+            for d in self.context.days:
+                self.result.update(d.parse())
+            if self.result.valid:
+                self.context.path.touch(exist_ok=True)
+                self.context.path.write_text(self.context.template)
+            return self.result
+
+
 @dataclass(order=True)
 class Logbook(Parsable):
     root: Path
@@ -316,6 +317,19 @@ class Logbook(Parsable):
     def footer(self) -> 'Footer':
         return Footer(self)
 
+    @cached_property
+    def template(self) -> str:
+        table = E.table({'class': 'year'})
+        for y in self.years:
+            table.append(E.tr(E.th(
+                E.a(str(y.year), dict(href=relpath(y.path, self.path.parent)))
+            )))
+        return '\n'.join([
+            html_to_string(table),
+            self.footer.template,
+            ''
+        ])
+
     class Parser(Parsable.Parser['Logbook']):
         def parse(self) -> ParseResult:
             self.result.reset()
@@ -325,7 +339,7 @@ class Logbook(Parsable):
                 self.result.update(y.parse())
             if self.result.valid:
                 self.context.path.touch(exist_ok=True)
-                self.context.path.write_text(self.context.footer.template)
+                self.context.path.write_text(self.context.template)
             return self.result
 
 
@@ -451,11 +465,3 @@ def parse_markdown_element(string: str) -> HtmlElement:
 
 def html_to_string(element: HtmlElement) -> str:
     return html.tostring(element, encoding='unicode', pretty_print=True).strip()
-
-
-def _a(href: str, text: str):
-    element = HtmlElement()
-    element.tag = 'a'
-    element.attrib['href'] = href
-    element.text = text
-    return element

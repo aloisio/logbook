@@ -50,6 +50,18 @@ class TestLogbook:
         assert not logbook.parse().errors
         assert not Footer(logbook).parse().errors, 'Should create valid footer'
 
+    def test_parse_valid_creates_year_links(self, tmp_path):
+        logbook_path = create_logbook_files(tmp_path)
+        logbook = Logbook(logbook_path)
+        assert not logbook.parse().errors
+        tree = parse_markdown(logbook.path)
+        links = list(tree.iterlinks())[:-1]
+        print(links)
+        assert links[0][0].text == '2020'
+        assert links[0][2] == '2020/2020.md'
+        assert links[1][0].text == '2021'
+        assert links[1][2] == '2021/2021.md'
+
     def test_parse_invalid_missing_stylesheet(self, tmp_path):
         logbook_path = create_logbook_files(tmp_path)
         (logbook_path / 'style.css').unlink()
