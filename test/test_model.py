@@ -532,5 +532,5 @@ def create_logbook_files(root: Path, day_mutator: Callable[[str], str] = lambda 
     logbook_path = root / 'logbook'
     shutil.copytree(TEST_ROOT / 'resources', logbook_path)
     day_path = logbook_path / DAY_1_RELATIVE_PATH
-    day_path.write_text(day_mutator(day_path.read_text()))
+    day_path.write_text(day_mutator(day_path.read_text(encoding='utf-8')), encoding='utf-8')
     return logbook_path

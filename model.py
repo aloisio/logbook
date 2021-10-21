@@ -1,11 +1,11 @@
 import datetime
-import os
 import re
 from abc import ABCMeta, abstractmethod
 from calendar import month_name, HTMLCalendar
 from dataclasses import dataclass, field, InitVar
 from functools import cached_property, lru_cache
-from itertools import pairwise, islice
+from itertools import pairwise
+from os import walk
 from os.path import relpath
 from pathlib import Path
 from typing import List, TypeVar, Generic, final, Pattern, ClassVar, Union
@@ -172,15 +172,16 @@ class Month(Parsable):
         for e in table.iter('th', 'td'):
             e.attrib.pop('class', None)
         month_header = parse_markdown_element(self.header.template)
-        month_header_row = next(table.iter('tr'), None)
+        month_rows = table.iter('tr')
+        month_header_row = next(month_rows, None)
         month_header_row.clear()
         month_header_row.append(month_header)
-        week_headers = next(islice(table.iter('tr'), 1, None), [])
+        week_headers = next(month_rows, [])
         for th in week_headers:
             th.text = th.text[0:2]
         days = {str(d.day): d for d in self.days}
         for day_cell in [td for td in table.iter('td') if td.text in days]:
-            href = relpath(days[day_cell.text].path, self.path.parent)
+            href = relative_path(days[day_cell.text].path, self.path.parent)
             day_link = E.a(day_cell.text, dict(href=href))
             day_cell.clear()
             day_cell.append(day_link)
@@ -203,7 +204,7 @@ class Month(Parsable):
         def parse(self) -> ParseResult:
             self.result.reset()
             self.context.path.touch(exist_ok=True)
-            self.context.path.write_text(self.context.template)
+            self.context.path.write_text(self.context.template, encoding='utf-8')
             return self.result
 
 
@@ -247,14 +248,14 @@ class Year(Parsable):
             month_header_row = next(rows, None)
             month_header = next(month_header_row.iter('th'), HtmlElement())
             if (month_key := month_header.text.lower()) in months:
-                month_href = relpath(months[month_key].path, self.path.parent)
+                month_href = relative_path(months[month_key].path, self.path.parent)
                 month_link = E.a(month_header.text, dict(href=month_href))
                 month_header.clear()
                 month_header.attrib['colspan'] = '7'
                 month_header.append(month_link)
                 days = {str(d.day): d for d in months[month_key].days}
                 for day_cell in [td for td in month_table.findall('.//td') if td.text in days]:
-                    day_href = relpath(days[day_cell.text].path, self.path.parent)
+                    day_href = relative_path(days[day_cell.text].path, self.path.parent)
                     day_link = E.a(day_cell.text, dict(href=day_href))
                     day_cell.clear()
                     day_cell.append(day_link)
@@ -298,7 +299,7 @@ class Year(Parsable):
                 self.result.update(d.parse())
             if self.result.valid:
                 self.context.path.touch(exist_ok=True)
-                self.context.path.write_text(self.context.template)
+                self.context.path.write_text(self.context.template, encoding='utf-8')
             return self.result
 
 
@@ -329,7 +330,7 @@ class Logbook(Parsable):
                 table.append(tr := E.tr())
             if y in years:
                 tr.append(E.th(
-                    E.a(str(years[y].year), dict(href=relpath(years[y].path, self.path.parent)))
+                    E.a(str(years[y].year), dict(href=relative_path(years[y].path, self.path.parent)))
                 ))
             else:
                 tr.append(E.th(str(y)))
@@ -344,7 +345,7 @@ class Logbook(Parsable):
             self.result.reset()
             if not (self.context.path.parent / 'style.css').exists():
                 self.result.add_error(self.context.path.parent, 'Missing style.css')
-            for root, dirs, files in os.walk(self.context.root):
+            for root, dirs, files in walk(self.context.root):
                 for d in dirs:
                     if d in {'.git', '.hg'}:
                         dirs.remove(d)
@@ -355,7 +356,7 @@ class Logbook(Parsable):
                 self.result.update(y.parse())
             if self.result.valid:
                 self.context.path.touch(exist_ok=True)
-                self.context.path.write_text(self.context.template)
+                self.context.path.write_text(self.context.template, encoding='utf-8')
             return self.result
 
 
@@ -370,15 +371,15 @@ class DayHeader(Parsable):
     @cached_property
     def template(self) -> str:
         def backward_href():
-            return relpath(self.day.previous.path, self.day.path.parent)
+            return relative_path(self.day.previous.path, self.day.path.parent)
 
         def forward_href():
-            return relpath(self.day.next.path, self.day.path.parent)
+            return relative_path(self.day.next.path, self.day.path.parent)
 
         backward = '◀' if self.day.previous is None else f'[◀]({backward_href()})'
         forward = '▶' if self.day.next is None else f'[▶]({forward_href()})'
         up_text = f'{self.day.year:04d}-{self.day.month:02d}-{self.day.day:02d}'
-        up_href = f'{relpath(Year(self.day).path, self.day.path.parent)}#{Month(self.day).name}'
+        up_href = f'{relative_path(Year(self.day).path, self.day.path.parent)}#{Month(self.day).name}'
         upward = f'[{up_text}]({up_href})'
         return f'# {backward} {upward} {forward}'
 
@@ -405,10 +406,10 @@ class MonthHeader:
     @property
     def template(self) -> str:
         def backward_href():
-            return relpath(self.month.previous.path, self.month.path.parent)
+            return relative_path(self.month.previous.path, self.month.path.parent)
 
         def forward_href():
-            return relpath(self.month.next.path, self.month.path.parent)
+            return relative_path(self.month.next.path, self.month.path.parent)
 
         yyyy = f'{self.month.year:04d}'
         mm = f'{self.month.month:02d}'
@@ -425,10 +426,10 @@ class YearHeader:
     @property
     def template(self) -> str:
         def backward_href():
-            return relpath(self.year.previous.path, self.year.path.parent)
+            return relative_path(self.year.previous.path, self.year.path.parent)
 
         def forward_href():
-            return relpath(self.year.next.path, self.year.path.parent)
+            return relative_path(self.year.next.path, self.year.path.parent)
 
         yyyy = f'{self.year.year:04d}'
         backward = f'<a href={backward_href()}>◀</a>' if self.year.previous else '◀'
@@ -447,7 +448,7 @@ class Footer(Parsable):
 
     @cached_property
     def template(self) -> str:
-        style_href = relpath(self.container.root / 'style.css', self.path.parent)
+        style_href = relative_path(self.container.root / 'style.css', self.path.parent)
         return f'<footer><link href={style_href} rel=stylesheet><hr></footer>'
 
     class Parser(Parsable.Parser['Footer']):
@@ -481,3 +482,7 @@ def parse_markdown_element(string: str) -> HtmlElement:
 
 def html_to_string(element: HtmlElement) -> str:
     return html.tostring(element, encoding='unicode', pretty_print=True).strip()
+
+
+def relative_path(path: Path, start: Path):
+    return Path(relpath(path, start)).as_posix()
