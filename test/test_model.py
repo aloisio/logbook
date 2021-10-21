@@ -70,6 +70,13 @@ class TestLogbook:
         result = Logbook(logbook_path).parse()
         assert ParseError(logbook_path, 'Missing style.css') in result.errors
 
+    def test_parse_invalid_empty_folder(self, tmp_path):
+        logbook_path = create_logbook_files(tmp_path)
+        day = Day(logbook_path, DATE_1)
+        day.path.unlink()
+        result = Logbook(logbook_path).parse()
+        assert ParseError(day.path.parent, 'Empty directory') in result.errors
+
 
 class TestYear:
     def test_dataclass(self, tmp_path):

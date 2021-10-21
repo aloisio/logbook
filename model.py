@@ -1,4 +1,5 @@
 import datetime
+import os
 import re
 from abc import ABCMeta, abstractmethod
 from calendar import month_name, HTMLCalendar
@@ -320,10 +321,18 @@ class Logbook(Parsable):
     @cached_property
     def template(self) -> str:
         table = E.table({'class': 'year'})
-        for y in self.years:
-            table.append(E.tr(E.th(
-                E.a(str(y.year), dict(href=relpath(y.path, self.path.parent)))
-            )))
+        years = {y.year: y for y in self.years}
+        year_range = list(range(10 * (self.years[0].year // 10), self.years[-1].year + 1))
+        tr = E.tr()
+        for y in year_range:
+            if not y % 10:
+                table.append(tr := E.tr())
+            if y in years:
+                tr.append(E.th(
+                    E.a(str(years[y].year), dict(href=relpath(years[y].path, self.path.parent)))
+                ))
+            else:
+                tr.append(E.th(str(y)))
         return '\n'.join([
             html_to_string(table),
             self.footer.template,
@@ -335,6 +344,13 @@ class Logbook(Parsable):
             self.result.reset()
             if not (self.context.path.parent / 'style.css').exists():
                 self.result.add_error(self.context.path.parent, 'Missing style.css')
+            for root, dirs, files in os.walk(self.context.root):
+                for d in dirs:
+                    if d in {'.git', '.hg'}:
+                        dirs.remove(d)
+                        continue
+                    if not next((dir_path := Path(root) / d).iterdir(), None):
+                        self.result.add_error(dir_path, 'Empty directory')
             for y in self.context.years:
                 self.result.update(y.parse())
             if self.result.valid:
