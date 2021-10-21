@@ -40,6 +40,8 @@ class TestLogbook:
         logbook = Logbook(logbook_path)
         result = logbook.parse()
         assert logbook.years == [Year(Day(logbook_path, DATE_1)), Year(Day(logbook_path, DATE_2))]
+        assert logbook.years[0].next == logbook.years[1]
+        assert logbook.years[1].previous == logbook.years[0]
         assert result.valid
         assert not result.errors
         assert (logbook_path / 'index.md').exists(), 'Should create index'

@@ -311,7 +311,7 @@ class Logbook(Parsable):
 
     @cached_property
     def years(self) -> List[Year]:
-        return sorted({Year(d) for d in Day.create(self.root)})
+        return Year.create(self.root)
 
     @cached_property
     def footer(self) -> 'Footer':
