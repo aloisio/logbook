@@ -521,5 +521,5 @@ def relative_path(path: Path, start: Path):
 
 
 def invalidate_cache():
-    Day.create.clear_cache()
-    parse_markdown.clear_cache()
+    Day.create.cache_clear()
+    parse_markdown.cache_clear()
