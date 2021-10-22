@@ -85,7 +85,7 @@ class Day(Parsable):
     previous: 'Day' = field(compare=False, init=False, default=None, hash=False, repr=False)
     next: 'Day' = field(compare=False, init=False, default=None, hash=False, repr=False)
 
-    PATH_PATTERN: ClassVar[Pattern] = re.compile(r'^.*?(?P<yyyy>[0-9]{4}).'
+    PATH_PATTERN: ClassVar[Pattern] = re.compile(r'^(?P<yyyy>[0-9]{4}).'
                                                  r'(?P<mm>[0-9]{2}).'
                                                  r'(?P<dd>[0-9]{2}).'
                                                  r'(?P<md>(?P=yyyy)(?P=mm)(?P=dd)\.md)$')
@@ -110,7 +110,10 @@ class Day(Parsable):
         def day(path: Path):
             return Day(root, datetime.date(int(path.name[0:4]), int(path.name[4:6]), int(path.name[6:8])))
 
-        days = list(map(day, filter(lambda p: Day.PATH_PATTERN.match(p.as_posix()), sorted(root.rglob('*.md')))))
+        def pattern_matches(path: Path):
+            return Day.PATH_PATTERN.match(relative_path(path, root))
+
+        days = list(map(day, filter(pattern_matches, sorted(root.rglob('*.md')))))
 
         for prv, cur in pairwise(days):
             prv.next = cur
@@ -376,8 +379,8 @@ class DayHeader(Parsable):
         def forward_href():
             return relative_path(self.day.next.path, self.day.path.parent)
 
-        backward = '◀' if self.day.previous is None else f'[◀]({backward_href()})'
-        forward = '▶' if self.day.next is None else f'[▶]({forward_href()})'
+        backward = '❮' if self.day.previous is None else f'[❮]({backward_href()})'
+        forward = '❯' if self.day.next is None else f'[❯]({forward_href()})'
         up_text = f'{self.day.year:04d}-{self.day.month:02d}-{self.day.day:02d}'
         up_href = f'{relative_path(Year(self.day).path, self.day.path.parent)}#{Month(self.day).name}'
         upward = f'[{up_text}]({up_href})'
@@ -413,8 +416,8 @@ class MonthHeader:
 
         yyyy = f'{self.month.year:04d}'
         mm = f'{self.month.month:02d}'
-        backward = f'<a href={backward_href()}>◀</a>' if self.month.previous else '◀'
-        forward = f'<a href={forward_href()}>▶</a>' if self.month.next else '▶'
+        backward = f'<a href={backward_href()}>❮</a>' if self.month.previous else '❮'
+        forward = f'<a href={forward_href()}>❯</a>' if self.month.next else '❯'
         upward = f'<a href=../{yyyy}.md#{self.month.name}>{yyyy}-{mm}</a>'
         return f'<th colspan=7>{backward} {upward} {forward}</th>'
 
@@ -432,8 +435,8 @@ class YearHeader:
             return relative_path(self.year.next.path, self.year.path.parent)
 
         yyyy = f'{self.year.year:04d}'
-        backward = f'<a href={backward_href()}>◀</a>' if self.year.previous else '◀'
-        forward = f'<a href={forward_href()}>▶</a>' if self.year.next else '▶'
+        backward = f'<a href={backward_href()}>❮</a>' if self.year.previous else '❮'
+        forward = f'<a href={forward_href()}>❯</a>' if self.year.next else '❯'
         upward = f'<a href=../index.md>{yyyy}</a>'
         return f'<th colspan=3>{backward} {upward} {forward}</th>'
 
@@ -473,11 +476,16 @@ class Footer(Parsable):
 def parse_markdown(path: Path) -> HtmlElement:
     # Using slower beautifulsoup parser because lxml mangles input with emojis
     return fromstring(
-        markdown(path.read_text(encoding='utf-8'), output_format='html').strip())
+        markdown(path.read_text(encoding='utf-8'),
+                 output_format='html',
+                 extensions=['extra']).strip())
 
 
 def parse_markdown_element(string: str) -> HtmlElement:
-    return html.fragment_fromstring(markdown(string, output_format='html'))
+    return html.fragment_fromstring(
+        markdown(string,
+                 output_format='html',
+                 extensions=['extra']))
 
 
 def html_to_string(element: HtmlElement) -> str:
