@@ -518,3 +518,8 @@ def html_to_string(element: HtmlElement) -> str:
 
 def relative_path(path: Path, start: Path):
     return Path(relpath(path, start)).as_posix()
+
+
+def invalidate_cache():
+    Day.create.clear_cache()
+    parse_markdown.clear_cache()
