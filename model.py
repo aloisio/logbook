@@ -57,9 +57,20 @@ class Parsable(metaclass=ABCMeta):
     def path(self) -> Path:
         pass
 
+    @property
+    @abstractmethod
+    def template(self) -> str:
+        pass
+
     @final
     def parse(self) -> ParseResult:
         return self.Parser(self).parse()
+
+    @final
+    def save(self):
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+        self.path.touch(exist_ok=True)
+        self.path.write_text(self.template, encoding='utf-8')
 
     @dataclass
     class Parser(Generic[ExtendsParsable], metaclass=ABCMeta):
@@ -101,8 +112,21 @@ class Day(Parsable):
         return self.root / yyyy / mm / dd / f'{yyyy}{mm}{dd}.md'
 
     @cached_property
+    def template(self) -> str:
+        return '\n'.join([
+            self.headers[0].template,
+            '',
+            self.footer.template,
+            ''
+        ])
+
+    @cached_property
     def headers(self):
         return [DayHeader(self)]
+
+    @cached_property
+    def footer(self):
+        return Footer(self)
 
     @staticmethod
     @lru_cache
@@ -128,7 +152,7 @@ class Day(Parsable):
                 return self.result.add_error(self.context.path, 'Markdown file does not exist')
             for h in self.context.headers:
                 self.result.update(h.parse())
-            return self.result.update(Footer(self.context).parse())
+            return self.result.update(self.context.footer.parse())
 
 
 @dataclass(unsafe_hash=True, order=True)
@@ -191,6 +215,7 @@ class Month(Parsable):
 
         return '\n'.join([
             html_to_string(table),
+            '',
             self.footer.template,
             ''
         ])
@@ -206,8 +231,7 @@ class Month(Parsable):
     class Parser(Parsable.Parser['Month']):
         def parse(self) -> ParseResult:
             self.result.reset()
-            self.context.path.touch(exist_ok=True)
-            self.context.path.write_text(self.context.template, encoding='utf-8')
+            self.context.save()
             return self.result
 
 
@@ -273,6 +297,7 @@ class Year(Parsable):
         year_header_row.append(year_header)
         return '\n'.join([
             html_to_string(table),
+            '',
             self.footer.template,
             ''
         ])
@@ -301,8 +326,7 @@ class Year(Parsable):
             for d in self.context.days:
                 self.result.update(d.parse())
             if self.result.valid:
-                self.context.path.touch(exist_ok=True)
-                self.context.path.write_text(self.context.template, encoding='utf-8')
+                self.context.save()
             return self.result
 
 
@@ -339,6 +363,7 @@ class Logbook(Parsable):
                 tr.append(E.th(str(y)))
         return '\n'.join([
             html_to_string(table),
+            '',
             self.footer.template,
             ''
         ])
@@ -358,8 +383,7 @@ class Logbook(Parsable):
             for y in self.context.years:
                 self.result.update(y.parse())
             if self.result.valid:
-                self.context.path.touch(exist_ok=True)
-                self.context.path.write_text(self.context.template, encoding='utf-8')
+                self.context.save()
             return self.result
 
 
@@ -485,7 +509,7 @@ def parse_markdown_element(string: str) -> HtmlElement:
     return html.fragment_fromstring(
         markdown(string,
                  output_format='html',
-                 extensions=['extra']))
+                 extensions=['extra']).strip())
 
 
 def html_to_string(element: HtmlElement) -> str:

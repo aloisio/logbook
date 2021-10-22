@@ -272,6 +272,7 @@ class TestDay:
         day.previous = Day(logbook_path, DATE_1)
         day.next = Day(logbook_path, DATE_3)
         result = day.parse()
+        assert day.template == f'{DayHeader(day).template}\n\n{Footer(day).template}\n'
         assert result.valid
         assert not result.errors
 
