@@ -4,6 +4,9 @@ import shutil
 from pathlib import Path
 from typing import Callable
 
+import pytest
+from lxml.html import document_fromstring
+
 from model import Logbook, Year, Month, Day, ParseError, Footer, DayHeader, parse_markdown, parse_markdown_element
 
 DATE_1 = datetime.date(2020, 8, 20)
@@ -132,7 +135,7 @@ class TestYear:
         year.next = Year(Day(logbook_path, DATE_2))
         assert not year.parse().errors
         tree = parse_markdown(year.path)
-        table = tree[0]
+        table = tree[0][0]
         assert table.tag == 'table', 'Calendar table is first element'
         assert table.attrib['class'] == 'year'
         assert not set(table.attrib.keys()).intersection({'border', 'cellpadding', 'cellspacing'})
@@ -159,7 +162,7 @@ class TestYear:
         logbook_path = create_logbook_files(tmp_path, remove_header)
         day = Day(logbook_path, DATE_1)
         result = Year(day).parse()
-        assert ParseError(day.path, 'Missing header') in result.errors
+        assert ParseError(day.path, 'Missing H1 header') in result.errors
 
 
 class TestMonth:
@@ -225,7 +228,7 @@ class TestMonth:
         month.next = Month(Day(logbook_path, DATE_2))
         assert not month.parse().errors
         tree = parse_markdown(month.path)
-        table = tree[0]
+        table = tree[0][0]
         assert table.tag == 'table', 'Calendar table is first element'
         assert table.attrib['class'] == 'month'
         assert not set(table.attrib.keys()).intersection({'border', 'cellpadding', 'cellspacing'})
@@ -296,8 +299,6 @@ class TestDayHeader:
     def test_dataclass(self, tmp_path):
         logbook_path = create_logbook_files(tmp_path)
         header1 = DayHeader(Day(logbook_path, DATE_2))
-        header2 = DayHeader(Day(logbook_path, DATE_1))
-        assert header2 < header1
         assert header1 == DayHeader(Day(logbook_path, DATE_2))
 
     def test_valid(self, tmp_path):
@@ -322,7 +323,7 @@ class TestDayHeader:
 
         logbook_path = create_logbook_files(tmp_path, remove_h1)
         header = DayHeader(Day(logbook_path, DATE_1))
-        assert ParseError(header.path, 'Missing header') in header.parse().errors
+        assert ParseError(header.path, 'Missing H1 header') in header.parse().errors
 
     def test_invalid_multiple_h1(self, tmp_path):
         def duplicate_h1(day_text):
@@ -330,7 +331,7 @@ class TestDayHeader:
 
         logbook_path = create_logbook_files(tmp_path, duplicate_h1)
         header = DayHeader(Day(logbook_path, DATE_1))
-        assert ParseError(header.path, 'Multiple headers') in header.parse().errors
+        assert ParseError(header.path, 'Multiple H1 headers') in header.parse().errors
 
     def test_invalid_h1_not_first_element(self, tmp_path):
         def move_h1_down(day_text):
@@ -338,7 +339,7 @@ class TestDayHeader:
 
         logbook_path = create_logbook_files(tmp_path, move_h1_down)
         header = DayHeader(Day(logbook_path, DATE_1))
-        assert ParseError(header.path, 'Header is not first element') in header.parse().errors
+        assert ParseError(header.path, 'H1 header is not first element') in header.parse().errors
 
     def test_invalid_h1_content(self, tmp_path):
         def invalidate_header(day_text):
@@ -346,7 +347,7 @@ class TestDayHeader:
 
         logbook_path = create_logbook_files(tmp_path, invalidate_header)
         header = DayHeader(Day(logbook_path, DATE_1))
-        assert ParseError(header.path, 'Header content problem') in header.parse().errors
+        assert ParseError(header.path, 'H1 header content problem') in header.parse().errors
 
     def test_template(self, tmp_path):
         logbook_path = create_logbook_files(tmp_path)
@@ -527,6 +528,22 @@ class TestFooter:
         logbook_path = create_logbook_files(tmp_path, add_content)
         footer = Footer(Day(logbook_path, DATE_1))
         assert ParseError(footer.path, 'Footer is not last element') in footer.parse().errors
+
+
+def test_lxml_463_emoji_bug():
+    def assert_emoji_parsing(transform):
+        # Woman Facepalming Emoji
+        # See https://unicode.org/emoji/charts/full-emoji-list.html
+        content = '<p>\U0001F926\u200D\u2640\uFE0F</p>'
+        doc = document_fromstring(transform(content))
+        assert doc[0][0].text == '\U0001F926\u200D\u2640\uFE0F'
+
+    with pytest.raises(Exception):
+        assert_emoji_parsing(lambda c: c)
+    with pytest.raises(Exception):
+        assert_emoji_parsing(lambda c: c.encode('utf-8'))
+    assert_emoji_parsing(lambda c: c.encode('utf-16'))
+    assert_emoji_parsing(lambda c: c.encode('utf-32'))
 
 
 def create_logbook_files(root: Path, day_mutator: Callable[[str], str] = lambda s: s):

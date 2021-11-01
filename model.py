@@ -3,18 +3,21 @@ import re
 from abc import ABCMeta, abstractmethod
 from calendar import month_name, HTMLCalendar
 from dataclasses import dataclass, field, InitVar
-from functools import cached_property, lru_cache
+from functools import cached_property, lru_cache, partial
 from itertools import pairwise
 from os import walk
 from os.path import relpath
 from pathlib import Path
-from typing import List, TypeVar, Generic, final, Pattern, ClassVar, Union
+from typing import List, TypeVar, Generic, final, Pattern, ClassVar, Union, Optional
 
 from lxml import html
 from lxml.builder import E
-from lxml.html import HtmlElement
-from lxml.html.soupparser import fromstring
+from lxml.html import HtmlElement, document_fromstring
 from markdown import markdown
+
+
+def _late_init_field():
+    return field(compare=False, init=False, default=None, hash=False, repr=False)
 
 
 @dataclass(frozen=True, order=True)
@@ -93,8 +96,10 @@ class Day(Parsable):
     month: int = field(init=False, hash=True)
     day: int = field(init=False, hash=True)
     date: InitVar[datetime.date]
-    previous: 'Day' = field(compare=False, init=False, default=None, hash=False, repr=False)
-    next: 'Day' = field(compare=False, init=False, default=None, hash=False, repr=False)
+    previous: Optional['Day'] = _late_init_field()
+    next: Optional['Day'] = _late_init_field()
+
+    footer: Optional['Footer'] = _late_init_field()
 
     PATH_PATTERN: ClassVar[Pattern] = re.compile(r'^(?P<yyyy>[0-9]{4}).'
                                                  r'(?P<mm>[0-9]{2}).'
@@ -122,11 +127,7 @@ class Day(Parsable):
 
     @cached_property
     def headers(self):
-        return [DayHeader(self)]
-
-    @cached_property
-    def footer(self):
-        return Footer(self)
+        return [DayHeader(self, 1)]
 
     @staticmethod
     @lru_cache
@@ -146,13 +147,22 @@ class Day(Parsable):
         return days
 
     class Parser(Parsable.Parser['Day']):
+        @cached_property
+        def doc(self):
+            return parse_markdown(self.context.path)
+
         def parse(self) -> ParseResult:
             self.result.reset()
             if not self.context.path.exists():
                 return self.result.add_error(self.context.path, 'Markdown file does not exist')
             for h in self.context.headers:
                 self.result.update(h.parse())
-            return self.result.update(self.context.footer.parse())
+            self.context.footer = Footer(self.context) if self.doc.xpath(Footer.xpath) else None
+            if not self.context.footer:
+                self.result.add_error(self.context.path, 'Missing footer', Footer(self.context).template)
+            else:
+                self.result.update(self.context.footer.parse())
+            return self.result
 
 
 @dataclass(unsafe_hash=True, order=True)
@@ -161,8 +171,8 @@ class Month(Parsable):
     year: int = field(init=False, hash=True)
     month: int = field(init=False, hash=True)
     day: InitVar[Day]
-    previous: 'Month' = field(compare=False, init=False, hash=False, default=None, repr=False)
-    next: 'Month' = field(compare=False, init=False, hash=False, default=None, repr=False)
+    previous: Optional['Month'] = _late_init_field()
+    next: Optional['Month'] = _late_init_field()
 
     def __post_init__(self, day: Day):
         self.root = day.root
@@ -240,8 +250,8 @@ class Year(Parsable):
     root: Path = field(init=False, hash=True, compare=True, repr=False)
     year: int = field(init=False, hash=True, compare=True)
     day: InitVar[Day]
-    previous: 'Year' = field(compare=False, init=False, hash=False, default=None, repr=False)
-    next: 'Year' = field(compare=False, init=False, hash=False, default=None, repr=False)
+    previous: Optional['Year'] = _late_init_field()
+    next: Optional['Year'] = _late_init_field()
 
     def __post_init__(self, day: Day):
         self.root = day.root
@@ -387,9 +397,11 @@ class Logbook(Parsable):
             return self.result
 
 
-@dataclass(order=True)
+@dataclass
 class DayHeader(Parsable):
     day: Day
+    level: int = 1
+    id: str = None
 
     @property
     def path(self) -> Path:
@@ -397,6 +409,9 @@ class DayHeader(Parsable):
 
     @cached_property
     def template(self) -> str:
+        return self.__h1_template()
+
+    def __h1_template(self):
         def backward_href():
             return relative_path(self.day.previous.path, self.day.path.parent)
 
@@ -405,25 +420,34 @@ class DayHeader(Parsable):
 
         backward = '❮' if self.day.previous is None else f'[❮]({backward_href()})'
         forward = '❯' if self.day.next is None else f'[❯]({forward_href()})'
-        up_text = f'{self.day.year:04d}-{self.day.month:02d}-{self.day.day:02d}'
-        up_href = f'{relative_path(Year(self.day).path, self.day.path.parent)}#{Month(self.day).name}'
+        yyyy = f'{self.day.year:04d}'
+        up_text = f'{yyyy}-{self.day.month:02d}-{self.day.day:02d}'
+        up_href = f'../../{yyyy}.md#{month_name[self.day.month].lower()}'
         upward = f'[{up_text}]({up_href})'
         return f'# {backward} {upward} {forward}'
 
     class Parser(Parsable.Parser['DayHeader']):
+        @cached_property
+        def tree(self) -> HtmlElement:
+            return parse_markdown(self.context.path)
+
         def parse(self) -> ParseResult:
             self.result.reset()
-            tree = parse_markdown(self.context.path)
-            if not (h1s := tree.findall('./h1')):
-                return self.result.add_error(self.context.path, 'Missing header', self.context.template)
-            if len(h1s) > 1:
-                self.result.add_error(self.context.path, 'Multiple headers')
-            if (actual := h1s[0]).getprevious() is not None:
-                self.result.add_error(self.context.path, 'Header is not first element')
-            expected = parse_markdown_element(self.context.template)
-            if html_to_string(expected) != html_to_string(actual):
-                self.result.add_error(self.context.path, 'Header content problem', self.context.template)
+            self.__parse_h1()
             return self.result
+
+        def __parse_h1(self):
+            err = partial(self.result.add_error, self.context.path)
+            if not (h1s := self.tree.xpath('/html/body/h1')):
+                err('Missing H1 header', self.context.template)
+            elif len(h1s) > 1:
+                err('Multiple H1 headers')
+            elif (actual := h1s[0]).getprevious() is not None:
+                err('H1 header is not first element')
+            else:
+                expected = parse_markdown_element(self.context.template)
+                if html_to_string(expected) != html_to_string(actual):
+                    err('H1 header content problem', self.context.template)
 
 
 @dataclass
@@ -469,6 +493,8 @@ class YearHeader:
 class Footer(Parsable):
     container: Union[Logbook, Year, Month, Day]
 
+    xpath: ClassVar[str] = '/html/body/footer'
+
     @cached_property
     def path(self) -> Path:
         return self.container.path
@@ -480,12 +506,12 @@ class Footer(Parsable):
 
     class Parser(Parsable.Parser['Footer']):
         @cached_property
-        def tree(self):
+        def doc(self):
             return parse_markdown(self.context.path)
 
         def parse(self) -> ParseResult:
             self.result.reset()
-            if not (footers := self.tree.findall('.//footer')):
+            if not (footers := self.doc.xpath(self.context.xpath)):
                 self.result.add_error(self.context.path, 'Missing footer', self.context.template)
             elif len(footers) > 1:
                 self.result.add_error(self.context.path, 'Multiple footers')
@@ -498,11 +524,10 @@ class Footer(Parsable):
 
 @lru_cache
 def parse_markdown(path: Path) -> HtmlElement:
-    # Using slower beautifulsoup parser because lxml mangles input with emojis
-    return fromstring(
-        markdown(path.read_text(encoding='utf-8'),
-                 output_format='html',
-                 extensions=['extra']).strip())
+    # Using utf-32 encoding because lxml 4.6.3 mangles unicode or utf-8 input with emojis
+    content = markdown(path.read_text(encoding='utf-8'), output_format='html',
+                       extensions=['extra']).strip().encode('utf-32')
+    return document_fromstring(content)
 
 
 def parse_markdown_element(string: str) -> HtmlElement:
