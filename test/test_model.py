@@ -277,7 +277,13 @@ class TestDay:
         result = day.parse()
         assert day.template == f'{DayHeader(day, 1).template}\n\n{Footer(day).template}\n'
         assert result.valid
-        assert not result.errors
+
+    def test_parse_valid_ids(self, tmp_path):
+        logbook_path = create_logbook_files(tmp_path)
+        day = Day(logbook_path, DATE_1)
+        day.next = Day(logbook_path, DATE_2)
+        assert day.parse().valid
+        assert day.ids == ['thread', 'lorem']
 
     def test_parse_invalid_file_does_not_exist(self, tmp_path):
         logbook_path = create_logbook_files(tmp_path)

@@ -104,6 +104,7 @@ class Day(Parsable):
     next: Optional['Day'] = _late_init_field()
 
     headers: Optional['DayHeader'] = _late_init_list()
+    ids: Optional['str'] = _late_init_list()
     footer: Optional['Footer'] = _late_init_field()
 
     PATH_PATTERN: ClassVar[Pattern] = re.compile(r'^(?P<yyyy>[0-9]{4}).'
@@ -157,6 +158,7 @@ class Day(Parsable):
             if not self.context.path.exists():
                 return self.result.add_error(self.context.path, 'Markdown file does not exist')
             self.__parse_headers()
+            self.__parse_ids()
             self.__parse_footer()
             return self.result
 
@@ -171,6 +173,9 @@ class Day(Parsable):
                 self.result.add_error(self.context.path, 'Multiple H1 headers', DayHeader(self.context, 1).template)
             for h in self.context.headers:
                 self.result.update(h.parse())
+
+        def __parse_ids(self):
+            self.context.ids = [str(i) for i in self.doc.xpath('//*[@id]/@id')]
 
         def __parse_footer(self):
             if not (footers := [Footer(self.context) for _ in self.doc.xpath(Footer.XPATH)]):
