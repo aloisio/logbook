@@ -275,7 +275,7 @@ class TestDay:
         day.previous = Day(logbook_path, DATE_1)
         day.next = Day(logbook_path, DATE_3)
         result = day.parse()
-        assert day.template == f'{DayHeader(day).template}\n\n{Footer(day).template}\n'
+        assert day.template == f'{DayHeader(day, 1).template}\n\n{Footer(day).template}\n'
         assert result.valid
         assert not result.errors
 
@@ -284,6 +284,22 @@ class TestDay:
         day = Day(logbook_path, datetime.date(2021, 8, 19))
         result = day.parse()
         assert ParseError(day.path, 'Markdown file does not exist') in result.errors
+
+    def test_parse_invalid_missing_h1(self, tmp_path):
+        def remove_h1(day_text):
+            return re.sub(r'^# .*?\n', '', day_text)
+
+        logbook_path = create_logbook_files(tmp_path, remove_h1)
+        day = Day(logbook_path, DATE_1)
+        assert ParseError(day.path, 'Missing H1 header') in day.parse().errors
+
+    def test_parse_invalid_multiple_h1(self, tmp_path):
+        def duplicate_h1(day_text):
+            return re.sub(r'^(# .*?\n)', r'\1\1', day_text)
+
+        logbook_path = create_logbook_files(tmp_path, duplicate_h1)
+        day = Day(logbook_path, DATE_1)
+        assert ParseError(day.path, 'Multiple H1 headers') in day.parse().errors
 
     def test_parse_invalid_missing_footer(self, tmp_path):
         def remove_footer(day_text):
@@ -294,12 +310,21 @@ class TestDay:
         result = day.parse()
         assert ParseError(day.path, 'Missing footer') in result.errors
 
+    def test_parse_invalid_multiple_footers(self, tmp_path):
+        def add_footer(day_text):
+            return day_text + '\n<footer><hr></footer>'
+
+        logbook_path = create_logbook_files(tmp_path, add_footer)
+        day = Day(logbook_path, DATE_1)
+        result = day.parse()
+        assert ParseError(day.path, 'Multiple footers') in result.errors
+
 
 class TestDayHeader:
     def test_dataclass(self, tmp_path):
         logbook_path = create_logbook_files(tmp_path)
-        header1 = DayHeader(Day(logbook_path, DATE_2))
-        assert header1 == DayHeader(Day(logbook_path, DATE_2))
+        header1 = DayHeader(Day(logbook_path, DATE_2), 1)
+        assert header1 == DayHeader(Day(logbook_path, DATE_2), 1)
 
     def test_valid(self, tmp_path):
         logbook_path = create_logbook_files(tmp_path)
@@ -310,35 +335,19 @@ class TestDayHeader:
         day2.previous = day1
         day2.next = day3
         day3.previous = day2
-        header1 = DayHeader(day1)
-        header2 = DayHeader(day2)
-        header3 = DayHeader(day3)
+        header1 = DayHeader(day1, 1)
+        header2 = DayHeader(day2, 1)
+        header3 = DayHeader(day3, 1)
         assert not header1.parse().errors
         assert not header2.parse().errors
         assert not header3.parse().errors
-
-    def test_invalid_missing_h1(self, tmp_path):
-        def remove_h1(day_text):
-            return re.sub(r'^# .*?\n', '', day_text)
-
-        logbook_path = create_logbook_files(tmp_path, remove_h1)
-        header = DayHeader(Day(logbook_path, DATE_1))
-        assert ParseError(header.path, 'Missing H1 header') in header.parse().errors
-
-    def test_invalid_multiple_h1(self, tmp_path):
-        def duplicate_h1(day_text):
-            return re.sub(r'^(# .*?\n)', r'\1\1', day_text)
-
-        logbook_path = create_logbook_files(tmp_path, duplicate_h1)
-        header = DayHeader(Day(logbook_path, DATE_1))
-        assert ParseError(header.path, 'Multiple H1 headers') in header.parse().errors
 
     def test_invalid_h1_not_first_element(self, tmp_path):
         def move_h1_down(day_text):
             return re.sub(r'^(# .*?\n)', r'- Item\n\1', day_text)
 
         logbook_path = create_logbook_files(tmp_path, move_h1_down)
-        header = DayHeader(Day(logbook_path, DATE_1))
+        header = DayHeader(Day(logbook_path, DATE_1), 1)
         assert ParseError(header.path, 'H1 header is not first element') in header.parse().errors
 
     def test_invalid_h1_content(self, tmp_path):
@@ -346,14 +355,14 @@ class TestDayHeader:
             return re.sub(r'^\(\.\.', '(.', day_text)
 
         logbook_path = create_logbook_files(tmp_path, invalidate_header)
-        header = DayHeader(Day(logbook_path, DATE_1))
+        header = DayHeader(Day(logbook_path, DATE_1), 1)
         assert ParseError(header.path, 'H1 header content problem') in header.parse().errors
 
     def test_template(self, tmp_path):
         logbook_path = create_logbook_files(tmp_path)
         day = Day(logbook_path, DATE_1)
         day.next = Day(logbook_path, DATE_2)
-        header = DayHeader(day)
+        header = DayHeader(day, 1)
         assert header.template == '# ❮ [2020-08-20](../../2020.md#august) [❯](../../../2021/08/20/20210820.md)'
 
 
@@ -448,22 +457,6 @@ class TestFooter:
         result = footer.parse()
         assert result.valid
         assert not result.errors
-
-    def test_parse_invalid_missing_footer(self, tmp_path):
-        def remove_footer(day_text):
-            return re.sub(r'<footer.*?footer>', '', day_text)
-
-        logbook_path = create_logbook_files(tmp_path, remove_footer)
-        footer = Footer(Day(logbook_path, DATE_1))
-        assert ParseError(footer.path, 'Missing footer') in footer.parse().errors
-
-    def test_parse_invalid_multiple_footers(self, tmp_path):
-        def add_footer(day_text):
-            return day_text + '\n<footer><hr></footer>'
-
-        logbook_path = create_logbook_files(tmp_path, add_footer)
-        footer = Footer(Day(logbook_path, DATE_1))
-        assert ParseError(footer.path, 'Multiple footers') in footer.parse().errors
 
     def test_parse_invalid_footer_missing_rule(self, tmp_path):
         def remove_hr(day_text):

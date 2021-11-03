@@ -3,7 +3,7 @@ import re
 from abc import ABCMeta, abstractmethod
 from calendar import month_name, HTMLCalendar
 from dataclasses import dataclass, field, InitVar
-from functools import cached_property, lru_cache, partial
+from functools import cached_property, lru_cache
 from itertools import pairwise
 from os import walk
 from os.path import relpath
@@ -18,6 +18,10 @@ from markdown import markdown
 
 def _late_init_field():
     return field(compare=False, init=False, default=None, hash=False, repr=False)
+
+
+def _late_init_list():
+    return field(compare=False, init=False, default_factory=lambda: [], hash=False, repr=False)
 
 
 @dataclass(frozen=True, order=True)
@@ -99,6 +103,7 @@ class Day(Parsable):
     previous: Optional['Day'] = _late_init_field()
     next: Optional['Day'] = _late_init_field()
 
+    headers: Optional['DayHeader'] = _late_init_list()
     footer: Optional['Footer'] = _late_init_field()
 
     PATH_PATTERN: ClassVar[Pattern] = re.compile(r'^(?P<yyyy>[0-9]{4}).'
@@ -119,15 +124,11 @@ class Day(Parsable):
     @cached_property
     def template(self) -> str:
         return '\n'.join([
-            self.headers[0].template,
+            DayHeader(self, 1).template,
             '',
-            self.footer.template,
+            Footer(self).template,
             ''
         ])
-
-    @cached_property
-    def headers(self):
-        return [DayHeader(self, 1)]
 
     @staticmethod
     @lru_cache
@@ -155,14 +156,30 @@ class Day(Parsable):
             self.result.reset()
             if not self.context.path.exists():
                 return self.result.add_error(self.context.path, 'Markdown file does not exist')
+            self.__parse_headers()
+            self.__parse_footer()
+            return self.result
+
+        def __parse_headers(self):
+            self.context.headers = [DayHeader(self.context,
+                                              int(h.tag[1]),
+                                              self.doc.getroottree().getpath(h))
+                                    for h in self.doc.xpath(DayHeader.H1_XPATH)]
+            if not (h1s := [h for h in self.context.headers if h.level == 1]):
+                self.result.add_error(self.context.path, 'Missing H1 header', DayHeader(self.context, 1).template)
+            elif len(h1s) > 1:
+                self.result.add_error(self.context.path, 'Multiple H1 headers', DayHeader(self.context, 1).template)
             for h in self.context.headers:
                 self.result.update(h.parse())
-            self.context.footer = Footer(self.context) if self.doc.xpath(Footer.xpath) else None
-            if not self.context.footer:
+
+        def __parse_footer(self):
+            if not (footers := [Footer(self.context) for _ in self.doc.xpath(Footer.XPATH)]):
                 self.result.add_error(self.context.path, 'Missing footer', Footer(self.context).template)
+            elif len(footers) > 1:
+                self.result.add_error(self.context.path, 'Multiple footers')
             else:
+                self.context.footer = footers[0]
                 self.result.update(self.context.footer.parse())
-            return self.result
 
 
 @dataclass(unsafe_hash=True, order=True)
@@ -400,8 +417,11 @@ class Logbook(Parsable):
 @dataclass
 class DayHeader(Parsable):
     day: Day
-    level: int = 1
-    id: str = None
+    level: int
+    xpath: Optional[str] = None
+
+    H1_XPATH: ClassVar[str] = '/html/body/h1'
+    XPATH: ClassVar[str] = f'/html/body/*[{" or ".join(["self::h{}".format(i + 1) for i in range(6)])}]'
 
     @property
     def path(self) -> Path:
@@ -409,7 +429,8 @@ class DayHeader(Parsable):
 
     @cached_property
     def template(self) -> str:
-        return self.__h1_template()
+        if self.level == 1:
+            return self.__h1_template()
 
     def __h1_template(self):
         def backward_href():
@@ -428,26 +449,23 @@ class DayHeader(Parsable):
 
     class Parser(Parsable.Parser['DayHeader']):
         @cached_property
-        def tree(self) -> HtmlElement:
+        def doc(self) -> HtmlElement:
             return parse_markdown(self.context.path)
 
         def parse(self) -> ParseResult:
             self.result.reset()
-            self.__parse_h1()
+            if self.context.level == 1:
+                self.__parse_h1()
             return self.result
 
         def __parse_h1(self):
-            err = partial(self.result.add_error, self.context.path)
-            if not (h1s := self.tree.xpath('/html/body/h1')):
-                err('Missing H1 header', self.context.template)
-            elif len(h1s) > 1:
-                err('Multiple H1 headers')
-            elif (actual := h1s[0]).getprevious() is not None:
-                err('H1 header is not first element')
+            actual = self.doc.xpath(self.context.xpath or DayHeader.H1_XPATH)[0]
+            if actual.getprevious() is not None:
+                self.result.add_error(self.context.path, 'H1 header is not first element')
             else:
                 expected = parse_markdown_element(self.context.template)
                 if html_to_string(expected) != html_to_string(actual):
-                    err('H1 header content problem', self.context.template)
+                    self.result.add_error(self.context.path, 'H1 header content problem', self.context.template)
 
 
 @dataclass
@@ -493,7 +511,7 @@ class YearHeader:
 class Footer(Parsable):
     container: Union[Logbook, Year, Month, Day]
 
-    xpath: ClassVar[str] = '/html/body/footer'
+    XPATH: ClassVar[str] = '/html/body/footer'
 
     @cached_property
     def path(self) -> Path:
@@ -505,19 +523,17 @@ class Footer(Parsable):
         return f'<footer><link href={style_href} rel=stylesheet><hr></footer>'
 
     class Parser(Parsable.Parser['Footer']):
+
         @cached_property
         def doc(self):
             return parse_markdown(self.context.path)
 
         def parse(self) -> ParseResult:
             self.result.reset()
-            if not (footers := self.doc.xpath(self.context.xpath)):
-                self.result.add_error(self.context.path, 'Missing footer', self.context.template)
-            elif len(footers) > 1:
-                self.result.add_error(self.context.path, 'Multiple footers')
-            elif footers[0].getnext() is not None:
+            footer = self.doc.xpath(self.context.XPATH)[0]
+            if footer.getnext() is not None:
                 self.result.add_error(self.context.path, 'Footer is not last element')
-            elif html_to_string(parse_markdown_element(self.context.template)) != html_to_string(footers[0]):
+            elif html_to_string(parse_markdown_element(self.context.template)) != html_to_string(footer):
                 self.result.add_error(self.context.path, 'Footer content problem', self.context.template)
             return self.result
 
