@@ -61,7 +61,6 @@ class TestLogbook:
         assert not logbook.parse().errors
         tree = parse_markdown(logbook.path)
         links = list(tree.iterlinks())[:-1]
-        print(links)
         assert links[0][0].text == '2020'
         assert links[0][2] == '2020/2020.md'
         assert links[1][0].text == '2021'
@@ -98,7 +97,9 @@ class TestYear:
 
     def test_create_from_files(self, tmp_path):
         logbook_path = create_logbook_files(tmp_path)
-        all_years = Year.create(logbook_path)
+        logbook = Logbook(logbook_path)
+        logbook.parse()
+        all_years = logbook.years
         assert all_years == [Year(Day(logbook_path, DATE_1)), Year(Day(logbook_path, DATE_2))]
         assert all_years[0].previous is None
         assert all_years[1].previous == all_years[0]
@@ -106,12 +107,17 @@ class TestYear:
         assert all_years[1].next is None
 
     def test_path(self, tmp_path):
-        year = Year(Day(tmp_path, DATE_1))
-        assert year.path == tmp_path / YEAR_1_RELATIVE_PATH
+        logbook_path = create_logbook_files(tmp_path)
+        logbook = Logbook(logbook_path)
+        logbook.parse()
+        year = logbook.years[0]
+        assert year.path == logbook_path / YEAR_1_RELATIVE_PATH
 
     def test_parse_valid(self, tmp_path):
         logbook_path = create_logbook_files(tmp_path)
-        year = Year(Day(logbook_path, DATE_2))
+        logbook = Logbook(logbook_path)
+        logbook.parse()
+        year = logbook.years[1]
         assert year.months == [Month(Day(logbook_path, DATE_2)),
                                Month(Day(logbook_path, DATE_3))]
         assert year.days == [Day(logbook_path, DATE_2),
@@ -125,14 +131,17 @@ class TestYear:
 
     def test_parse_valid_creates_footer(self, tmp_path):
         logbook_path = create_logbook_files(tmp_path)
-        year = Year(Day(logbook_path, DATE_1))
+        logbook = Logbook(logbook_path)
+        logbook.parse()
+        year = logbook.years[0]
         assert not year.parse().errors
         assert not Footer(year).parse().errors, 'Should create valid footer'
 
     def test_parse_valid_creates_calendar_table(self, tmp_path):
         logbook_path = create_logbook_files(tmp_path)
-        year = Year(Day(logbook_path, DATE_1))
-        year.next = Year(Day(logbook_path, DATE_2))
+        logbook = Logbook(logbook_path)
+        logbook.parse()
+        year = logbook.years[0]
         assert not year.parse().errors
         tree = parse_markdown(year.path)
         table = tree[0][0]
@@ -160,8 +169,9 @@ class TestYear:
             return re.sub(r'^# .*?\n', '', day_text)
 
         logbook_path = create_logbook_files(tmp_path, remove_header)
-        day = Day(logbook_path, DATE_1)
-        result = Year(day).parse()
+        logbook = Logbook(logbook_path)
+        result = logbook.parse()
+        day = logbook.years[0].days[0]
         assert ParseError(day.path, 'Missing H1 header') in result.errors
 
 
@@ -197,7 +207,9 @@ class TestMonth:
 
     def test_create_from_files(self, tmp_path):
         logbook_path = create_logbook_files(tmp_path)
-        all_months = Month.create(logbook_path)
+        logbook = Logbook(logbook_path)
+        logbook.parse()
+        all_months = [m for y in logbook.years for m in y.months]
         assert all_months == [Month(Day(logbook_path, DATE_1)), Month(Day(logbook_path, DATE_2)),
                               Month(Day(logbook_path, DATE_3))]
         assert all_months[0].previous is None
@@ -209,7 +221,9 @@ class TestMonth:
 
     def test_parse_valid(self, tmp_path):
         logbook_path = create_logbook_files(tmp_path)
-        month = Month(Day(logbook_path, DATE_1))
+        logbook = Logbook(logbook_path)
+        logbook.parse()
+        month = logbook.years[0].months[0]
         result = month.parse()
         assert month.days == [Day(logbook_path, DATE_1)]
         assert result.valid
@@ -218,14 +232,17 @@ class TestMonth:
 
     def test_parse_valid_creates_footer(self, tmp_path):
         logbook_path = create_logbook_files(tmp_path)
-        month = Month(Day(logbook_path, DATE_1))
+        logbook = Logbook(logbook_path)
+        logbook.parse()
+        month = logbook.years[0].months[0]
         assert not month.parse().errors
         assert not Footer(month).parse().errors, 'Should create valid footer'
 
     def test_parse_valid_creates_calendar_table(self, tmp_path):
         logbook_path = create_logbook_files(tmp_path)
-        month = Month(Day(logbook_path, DATE_1))
-        month.next = Month(Day(logbook_path, DATE_2))
+        logbook = Logbook(logbook_path)
+        logbook.parse()
+        month = logbook.years[0].months[0]
         assert not month.parse().errors
         tree = parse_markdown(month.path)
         table = tree[0][0]

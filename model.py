@@ -100,6 +100,7 @@ class Day(Parsable):
     month: int = field(init=False, hash=True)
     day: int = field(init=False, hash=True)
     date: InitVar[datetime.date]
+
     previous: Optional['Day'] = _late_init_field()
     next: Optional['Day'] = _late_init_field()
 
@@ -132,7 +133,6 @@ class Day(Parsable):
         ])
 
     @staticmethod
-    @lru_cache
     def create(root: Path) -> List['Day']:
         def day(path: Path):
             return Day(root, datetime.date(int(path.name[0:4]), int(path.name[4:6]), int(path.name[6:8])))
@@ -193,8 +193,11 @@ class Month(Parsable):
     year: int = field(init=False, hash=True)
     month: int = field(init=False, hash=True)
     day: InitVar[Day]
+
     previous: Optional['Month'] = _late_init_field()
     next: Optional['Month'] = _late_init_field()
+
+    days: List[Day] = _late_init_list()
 
     def __post_init__(self, day: Day):
         self.root = day.root
@@ -217,10 +220,6 @@ class Month(Parsable):
     @cached_property
     def footer(self) -> 'Footer':
         return Footer(self)
-
-    @cached_property
-    def days(self) -> List['Day']:
-        return [d for d in Day.create(self.root) if d.year == self.year and d.month == self.month]
 
     @cached_property
     def template(self) -> str:
@@ -253,18 +252,20 @@ class Month(Parsable):
         ])
 
     @staticmethod
-    def create(root: Path) -> List['Month']:
-        months = sorted({Month(d) for d in Day.create(root)})
-        for prv, cur in pairwise(months):
+    def create(days: List[Day]) -> List['Month']:
+        months = {}
+        for d in days:
+            month = months.setdefault((d.year, d.month), Month(d))
+            month.days.append(d)
+        month_list = sorted(months.values())
+        for prv, cur in pairwise(month_list):
             prv.next = cur
             cur.previous = prv
-        return months
+        return month_list
 
     class Parser(Parsable.Parser['Month']):
         def parse(self) -> ParseResult:
-            self.result.reset()
-            self.context.save()
-            return self.result
+            return self.result.reset()
 
 
 @dataclass(unsafe_hash=True, order=True)
@@ -272,8 +273,12 @@ class Year(Parsable):
     root: Path = field(init=False, hash=True, compare=True, repr=False)
     year: int = field(init=False, hash=True, compare=True)
     day: InitVar[Day]
+
     previous: Optional['Year'] = _late_init_field()
     next: Optional['Year'] = _late_init_field()
+
+    days: List[Day] = _late_init_list()
+    months: List[Month] = _late_init_list()
 
     def __post_init__(self, day: Day):
         self.root = day.root
@@ -283,14 +288,6 @@ class Year(Parsable):
     def path(self) -> Path:
         yyyy = f'{self.year:04d}'
         return self.root / yyyy / f'{yyyy}.md'
-
-    @cached_property
-    def months(self) -> List['Month']:
-        return [m for m in Month.create(self.root) if m.year == self.year]
-
-    @cached_property
-    def days(self) -> List['Day']:
-        return [d for d in Day.create(self.root) if d.year == self.year]
 
     @cached_property
     def template(self) -> str:
@@ -343,12 +340,16 @@ class Year(Parsable):
         return Footer(self)
 
     @staticmethod
-    def create(root: Path):
-        years = sorted({Year(d) for d in Day.create(root)})
-        for prv, cur in pairwise(years):
+    def create(days: List[Day]):
+        years = {}
+        for d in days:
+            year = years.setdefault(d.year, Year(d))
+            year.days.append(d)
+        year_list = sorted(years.values())
+        for prv, cur in pairwise(year_list):
             prv.next = cur
             cur.previous = prv
-        return years
+        return year_list
 
     class Parser(Parsable.Parser['Year']):
         def parse(self) -> ParseResult:
@@ -357,8 +358,6 @@ class Year(Parsable):
                 self.result.update(m.parse())
             for d in self.context.days:
                 self.result.update(d.parse())
-            if self.result.valid:
-                self.context.save()
             return self.result
 
 
@@ -366,13 +365,11 @@ class Year(Parsable):
 class Logbook(Parsable):
     root: Path
 
+    years: List[Year] = _late_init_list()
+
     @cached_property
     def path(self) -> Path:
         return self.root / 'index.md'
-
-    @cached_property
-    def years(self) -> List[Year]:
-        return Year.create(self.root)
 
     @cached_property
     def footer(self) -> 'Footer':
@@ -389,7 +386,7 @@ class Logbook(Parsable):
                 table.append(tr := E.tr())
             if y in years:
                 tr.append(E.th(
-                    E.a(str(years[y].year), dict(href=relative_path(years[y].path, self.path.parent)))
+                    E.a(str(y), dict(href=relative_path(years[y].path, self.path.parent)))
                 ))
             else:
                 tr.append(E.th(str(y)))
@@ -403,6 +400,13 @@ class Logbook(Parsable):
     class Parser(Parsable.Parser['Logbook']):
         def parse(self) -> ParseResult:
             self.result.reset()
+            self.__validate_constraints()
+            self.__create_time_entities()
+            self.__parse_dependencies()
+            self.__save_time_entities()
+            return self.result
+
+        def __validate_constraints(self):
             if not (self.context.path.parent / 'style.css').exists():
                 self.result.add_error(self.context.path.parent, 'Missing style.css')
             for root, dirs, files in walk(self.context.root):
@@ -412,11 +416,25 @@ class Logbook(Parsable):
                         continue
                     if not next((dir_path := Path(root) / d).iterdir(), None):
                         self.result.add_error(dir_path, 'Empty directory')
+
+        def __create_time_entities(self):
+            days = Day.create(self.context.root)
+            months = Month.create(days)
+            self.context.years = Year.create(days)
+            for y in self.context.years:
+                y.months = [m for m in months if m.year == y.year]
+
+        def __parse_dependencies(self):
             for y in self.context.years:
                 self.result.update(y.parse())
+
+        def __save_time_entities(self):
             if self.result.valid:
                 self.context.save()
-            return self.result
+                for y in self.context.years:
+                    y.save()
+                    for m in y.months:
+                        m.save()
 
 
 @dataclass
@@ -567,5 +585,4 @@ def relative_path(path: Path, start: Path):
 
 
 def invalidate_cache():
-    Day.create.cache_clear()
     parse_markdown.cache_clear()
