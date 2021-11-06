@@ -563,9 +563,8 @@ class Footer(Parsable):
 
 @lru_cache
 def parse_markdown(path: Path) -> HtmlElement:
-    # Using utf-32 encoding because lxml 4.6.3 mangles unicode or utf-8 input with emojis
     content = markdown(path.read_text(encoding='utf-8'), output_format='html',
-                       extensions=['extra']).strip().encode('utf-32')
+                       extensions=['extra']).strip()
     return document_fromstring(content)
 
 
