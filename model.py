@@ -13,15 +13,7 @@ from typing import List, TypeVar, Generic, final, Pattern, ClassVar, Union, Opti
 from lxml import html
 from lxml.builder import E
 from lxml.html import HtmlElement, document_fromstring
-from markdown import markdown
-
-
-def _late_init_field():
-    return field(compare=False, init=False, default=None, hash=False, repr=False)
-
-
-def _late_init_list():
-    return field(compare=False, init=False, default_factory=lambda: [], hash=False, repr=False)
+from markdown_it import MarkdownIt
 
 
 @dataclass(frozen=True, order=True)
@@ -101,12 +93,12 @@ class Day(Parsable):
     day: int = field(init=False, hash=True)
     date: InitVar[datetime.date]
 
-    previous: Optional['Day'] = _late_init_field()
-    next: Optional['Day'] = _late_init_field()
+    previous: Optional['Day'] = field(compare=False, init=False, default=None, hash=False, repr=False)
+    next: Optional['Day'] = field(compare=False, init=False, default=None, hash=False, repr=False)
 
-    headers: Optional['DayHeader'] = _late_init_list()
-    ids: Optional['str'] = _late_init_list()
-    footer: Optional['Footer'] = _late_init_field()
+    headers: List['DayHeader'] = field(compare=False, init=False, default_factory=lambda: [], hash=False, repr=False)
+    ids: List['str'] = field(compare=False, init=False, default_factory=lambda: [], hash=False, repr=False)
+    footer: Optional['Footer'] = field(compare=False, init=False, default=None, hash=False, repr=False)
 
     PATH_PATTERN: ClassVar[Pattern] = re.compile(r'^(?P<yyyy>[0-9]{4}).'
                                                  r'(?P<mm>[0-9]{2}).'
@@ -194,10 +186,10 @@ class Month(Parsable):
     month: int = field(init=False, hash=True)
     day: InitVar[Day]
 
-    previous: Optional['Month'] = _late_init_field()
-    next: Optional['Month'] = _late_init_field()
+    previous: Optional['Month'] = field(compare=False, init=False, default=None, hash=False, repr=False)
+    next: Optional['Month'] = field(compare=False, init=False, default=None, hash=False, repr=False)
 
-    days: List[Day] = _late_init_list()
+    days: List[Day] = field(compare=False, init=False, default_factory=lambda: [], hash=False, repr=False)
 
     def __post_init__(self, day: Day):
         self.root = day.root
@@ -274,11 +266,11 @@ class Year(Parsable):
     year: int = field(init=False, hash=True, compare=True)
     day: InitVar[Day]
 
-    previous: Optional['Year'] = _late_init_field()
-    next: Optional['Year'] = _late_init_field()
+    previous: Optional['Year'] = field(compare=False, init=False, default=None, hash=False, repr=False)
+    next: Optional['Year'] = field(compare=False, init=False, default=None, hash=False, repr=False)
 
-    days: List[Day] = _late_init_list()
-    months: List[Month] = _late_init_list()
+    days: List[Day] = field(compare=False, init=False, default_factory=lambda: [], hash=False, repr=False)
+    months: List[Month] = field(compare=False, init=False, default_factory=lambda: [], hash=False, repr=False)
 
     def __post_init__(self, day: Day):
         self.root = day.root
@@ -365,7 +357,7 @@ class Year(Parsable):
 class Logbook(Parsable):
     root: Path
 
-    years: List[Year] = _late_init_list()
+    years: List[Year] = field(compare=False, init=False, default_factory=lambda: [], hash=False, repr=False)
 
     @cached_property
     def path(self) -> Path:
@@ -563,16 +555,13 @@ class Footer(Parsable):
 
 @lru_cache
 def parse_markdown(path: Path) -> HtmlElement:
-    content = markdown(path.read_text(encoding='utf-8'), output_format='html',
-                       extensions=['extra']).strip()
+    content = MarkdownIt().render(path.read_text(encoding='utf-8')).strip()
     return document_fromstring(content)
 
 
 def parse_markdown_element(string: str) -> HtmlElement:
     return html.fragment_fromstring(
-        markdown(string,
-                 output_format='html',
-                 extensions=['extra']).strip())
+        MarkdownIt().render(string).strip())
 
 
 def html_to_string(element: HtmlElement) -> str:

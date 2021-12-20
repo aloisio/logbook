@@ -543,7 +543,7 @@ class TestFooter:
         assert ParseError(footer.path, 'Footer is not last element') in footer.parse().errors
 
 
-def test_lxml_464_emoji_bug():
+def test_lxml_471_emoji_bug():
     def assert_emoji_parsing(transform):
         # Woman Facepalming Emoji
         # See https://unicode.org/emoji/charts/full-emoji-list.html
