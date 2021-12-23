@@ -96,6 +96,27 @@ def test_image_links(tmp_path):
     ''')
 
 
+def test_autolink_does_not_create_link_reference_definition(tmp_path):
+    tmp_file(tmp_path).write_text(content('''
+        ## Test
+        
+        > Test <email@example.com>
+        >
+        > ![test](image.jpg)
+        >
+    '''))
+    main(tmp_file(tmp_path))
+    assert tmp_file(tmp_path).read_text() == content('''
+        ## Test
+        
+        > Test <email@example.com>
+        >
+        > ![test][1]
+        
+        [1]: image.jpg
+    ''')
+
+
 def test_auto_links_are_skipped(tmp_path):
     tmp_file(tmp_path).write_text(content('''
         Go to <https://www.google.com>

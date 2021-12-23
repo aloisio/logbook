@@ -3,7 +3,7 @@ import re
 from abc import ABCMeta, abstractmethod
 from calendar import month_name, HTMLCalendar
 from dataclasses import dataclass, field, InitVar
-from functools import cached_property, lru_cache
+from functools import cached_property, lru_cache, partial
 from itertools import pairwise
 from os import walk
 from os.path import relpath
@@ -13,7 +13,9 @@ from typing import List, TypeVar, Generic, final, Pattern, ClassVar, Union, Opti
 from lxml import html
 from lxml.builder import E
 from lxml.html import HtmlElement, document_fromstring
-from markdown_it import MarkdownIt
+from markdown_it.renderer import RendererHTML
+from mdformat._util import build_mdit
+from mdformat_gfm.plugin import update_mdit
 
 
 @dataclass(frozen=True, order=True)
@@ -85,6 +87,11 @@ class Parsable(metaclass=ABCMeta):
             pass
 
 
+_late_init_field = partial(field, compare=False, init=False, default=None, hash=False, repr=False)
+
+_late_init_list = partial(field, compare=False, init=False, default_factory=lambda: [], hash=False, repr=False)
+
+
 @dataclass(unsafe_hash=True, order=True)
 class Day(Parsable):
     root: Path = field(hash=True, repr=False)
@@ -93,12 +100,12 @@ class Day(Parsable):
     day: int = field(init=False, hash=True)
     date: InitVar[datetime.date]
 
-    previous: Optional['Day'] = field(compare=False, init=False, default=None, hash=False, repr=False)
-    next: Optional['Day'] = field(compare=False, init=False, default=None, hash=False, repr=False)
+    previous: Optional['Day'] = _late_init_field()
+    next: Optional['Day'] = _late_init_field()
 
-    headers: List['DayHeader'] = field(compare=False, init=False, default_factory=lambda: [], hash=False, repr=False)
-    ids: List['str'] = field(compare=False, init=False, default_factory=lambda: [], hash=False, repr=False)
-    footer: Optional['Footer'] = field(compare=False, init=False, default=None, hash=False, repr=False)
+    headers: List['DayHeader'] = _late_init_list()
+    ids: List['str'] = _late_init_list()
+    footer: Optional['Footer'] = _late_init_field()
 
     PATH_PATTERN: ClassVar[Pattern] = re.compile(r'^(?P<yyyy>[0-9]{4}).'
                                                  r'(?P<mm>[0-9]{2}).'
@@ -186,10 +193,10 @@ class Month(Parsable):
     month: int = field(init=False, hash=True)
     day: InitVar[Day]
 
-    previous: Optional['Month'] = field(compare=False, init=False, default=None, hash=False, repr=False)
-    next: Optional['Month'] = field(compare=False, init=False, default=None, hash=False, repr=False)
+    previous: Optional['Month'] = _late_init_field()
+    next: Optional['Month'] = _late_init_field()
 
-    days: List[Day] = field(compare=False, init=False, default_factory=lambda: [], hash=False, repr=False)
+    days: List[Day] = _late_init_list()
 
     def __post_init__(self, day: Day):
         self.root = day.root
@@ -266,11 +273,11 @@ class Year(Parsable):
     year: int = field(init=False, hash=True, compare=True)
     day: InitVar[Day]
 
-    previous: Optional['Year'] = field(compare=False, init=False, default=None, hash=False, repr=False)
-    next: Optional['Year'] = field(compare=False, init=False, default=None, hash=False, repr=False)
+    previous: Optional['Year'] = _late_init_field()
+    next: Optional['Year'] = _late_init_field()
 
-    days: List[Day] = field(compare=False, init=False, default_factory=lambda: [], hash=False, repr=False)
-    months: List[Month] = field(compare=False, init=False, default_factory=lambda: [], hash=False, repr=False)
+    days: List[Day] = _late_init_list()
+    months: List[Month] = _late_init_list()
 
     def __post_init__(self, day: Day):
         self.root = day.root
@@ -307,7 +314,7 @@ class Year(Parsable):
                     day_link = E.a(day_cell.text, dict(href=day_href))
                     day_cell.clear()
                     day_cell.append(day_link)
-                    month_table.getparent().attrib['id'] = months[month_key].name
+                    month_table.attrib['id'] = months[month_key].name
             week_headers = next(rows, [])
             for th in week_headers:
                 th.text = th.text[0:2]
@@ -357,7 +364,7 @@ class Year(Parsable):
 class Logbook(Parsable):
     root: Path
 
-    years: List[Year] = field(compare=False, init=False, default_factory=lambda: [], hash=False, repr=False)
+    years: List[Year] = _late_init_list()
 
     @cached_property
     def path(self) -> Path:
@@ -555,13 +562,13 @@ class Footer(Parsable):
 
 @lru_cache
 def parse_markdown(path: Path) -> HtmlElement:
-    content = MarkdownIt().render(path.read_text(encoding='utf-8')).strip()
+    content = markdown_parser().render(path.read_text(encoding='utf-8')).strip()
     return document_fromstring(content)
 
 
 def parse_markdown_element(string: str) -> HtmlElement:
     return html.fragment_fromstring(
-        MarkdownIt().render(string).strip())
+        markdown_parser().render(string).strip())
 
 
 def html_to_string(element: HtmlElement) -> str:
@@ -572,5 +579,13 @@ def relative_path(path: Path, start: Path):
     return Path(relpath(path, start)).as_posix()
 
 
+@lru_cache
+def markdown_parser():
+    parser = build_mdit(renderer_cls=RendererHTML, mdformat_opts={'number': True})
+    update_mdit(parser)
+    return parser
+
+
 def invalidate_cache():
+    markdown_parser.cache_clear()
     parse_markdown.cache_clear()

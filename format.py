@@ -35,12 +35,18 @@ def attributes_as_dict(link: Token) -> dict[str, str]:
 
 
 def get_links(tokens: list[Token]) -> Generator[Token, None, None]:
+    def is_link(token: Token):
+        return token.type == 'link_open' and token.markup != 'autolink'
+
+    def is_image(token: Token):
+        return token.type == 'image'
+
     last_i = len(tokens) - 1
     for i, token in enumerate(tokens):
-        if token.type == 'link_open' and i < last_i and tokens[i + 1].type == 'image':
+        if is_link(token) and i < last_i and is_image(tokens[i + 1]):
             yield tokens[i + 1]
             yield token
-        elif token.type == 'link_open' or token.type == 'image':
+        elif is_link(token) or is_image(token):
             yield token
         yield from get_links(token.children or [])
 
