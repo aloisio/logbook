@@ -3,18 +3,20 @@ import re
 from abc import ABCMeta, abstractmethod
 from calendar import month_name, HTMLCalendar
 from dataclasses import dataclass, field, InitVar
-from functools import cached_property, lru_cache, partial
+from functools import cached_property, partial, lru_cache
 from itertools import pairwise
 from os import walk
 from os.path import relpath
 from pathlib import Path
-from typing import List, TypeVar, Generic, final, Pattern, ClassVar, Union, Optional
+from typing import List, TypeVar, Generic, final, Pattern, ClassVar, Union, Optional, Generator
 
 from lxml import html
 from lxml.builder import E
 from lxml.html import HtmlElement, document_fromstring
 from markdown_it.renderer import RendererHTML
+from markdown_it.token import Token
 from mdformat._util import build_mdit
+from mdformat.renderer import MDRenderer
 from mdformat_gfm.plugin import update_mdit
 
 
@@ -150,7 +152,7 @@ class Day(Parsable):
     class Parser(Parsable.Parser['Day']):
         @cached_property
         def doc(self):
-            return parse_markdown(self.context.path)
+            return MarkdownParser.markdown_to_html_document(self.context.path)
 
         def parse(self) -> ParseResult:
             self.result.reset()
@@ -228,7 +230,7 @@ class Month(Parsable):
         table.attrib.pop('cellspacing', None)
         for e in table.iter('th', 'td'):
             e.attrib.pop('class', None)
-        month_header = parse_markdown_element(self.header.template)
+        month_header = MarkdownParser.markdown_to_html_fragment(self.header.template)
         month_rows = table.iter('tr')
         month_header_row = next(month_rows, None)
         month_header_row.clear()
@@ -319,7 +321,7 @@ class Year(Parsable):
             for th in week_headers:
                 th.text = th.text[0:2]
 
-        year_header = parse_markdown_element(self.header.template)
+        year_header = MarkdownParser.markdown_to_html_fragment(self.header.template)
         year_header_row = next(table.iter('tr'), None)
         year_header_row.clear()
         year_header_row.append(year_header)
@@ -472,7 +474,7 @@ class DayHeader(Parsable):
     class Parser(Parsable.Parser['DayHeader']):
         @cached_property
         def doc(self) -> HtmlElement:
-            return parse_markdown(self.context.path)
+            return MarkdownParser.markdown_to_html_document(self.context.path)
 
         def parse(self) -> ParseResult:
             self.result.reset()
@@ -485,7 +487,7 @@ class DayHeader(Parsable):
             if actual.getprevious() is not None:
                 self.result.add_error(self.context.path, 'H1 header is not first element')
             else:
-                expected = parse_markdown_element(self.context.template)
+                expected = MarkdownParser.markdown_to_html_fragment(self.context.template)
                 if html_to_string(expected) != html_to_string(actual):
                     self.result.add_error(self.context.path, 'H1 header content problem', self.context.template)
 
@@ -548,27 +550,92 @@ class Footer(Parsable):
 
         @cached_property
         def doc(self):
-            return parse_markdown(self.context.path)
+            return MarkdownParser.markdown_to_html_document(self.context.path)
 
         def parse(self) -> ParseResult:
             self.result.reset()
             footer = self.doc.xpath(self.context.XPATH)[0]
             if footer.getnext() is not None:
                 self.result.add_error(self.context.path, 'Footer is not last element')
-            elif html_to_string(parse_markdown_element(self.context.template)) != html_to_string(footer):
+            elif html_to_string(MarkdownParser.markdown_to_html_fragment(self.context.template)) != html_to_string(
+                    footer):
                 self.result.add_error(self.context.path, 'Footer content problem', self.context.template)
             return self.result
 
 
-@lru_cache
-def parse_markdown(path: Path) -> HtmlElement:
-    content = markdown_parser().render(path.read_text(encoding='utf-8')).strip()
-    return document_fromstring(content)
+class MarkdownParser:
+    @classmethod
+    @lru_cache
+    def markdown_to_html_document(cls, path: Path) -> HtmlElement:
+        content = cls.__markdown_to_html_parser().render(path.read_text(encoding='utf-8')).strip()
+        return document_fromstring(content)
 
+    @classmethod
+    def markdown_to_html_fragment(cls, string: str) -> HtmlElement:
+        return html.fragment_fromstring(
+            cls.__markdown_to_html_parser().render(string).strip())
 
-def parse_markdown_element(string: str) -> HtmlElement:
-    return html.fragment_fromstring(
-        markdown_parser().render(string).strip())
+    @classmethod
+    def normalize_markdown(cls, content) -> str:
+        parser = cls.__markdown_to_markdown_parser()
+        tokens = parser.parse(content)
+        env = {'references': {}}
+        links = list(cls.__get_links(tokens))
+        link_attributes: dict[tuple[str, str], int] = {}
+        for link in links:
+            link_attributes.setdefault(cls.__attributes_as_tuple(link), len(link_attributes) + 1)
+        for link in links:
+            index = link_attributes[cls.__attributes_as_tuple(link)]
+            label = str(index).zfill(len(str(len(link_attributes))))
+            link.meta['label'] = label
+            env['references'][label] = cls.__attributes_as_dict(link)
+        return parser.renderer.render(tokens, parser.options, env)
+
+    @classmethod
+    def invalidate_cache(cls):
+        cls.__markdown_to_html_parser.cache_clear()
+        cls.__markdown_to_markdown_parser.cache_clear()
+        cls.markdown_to_html_document.cache_clear()
+
+    @staticmethod
+    @lru_cache
+    def __markdown_to_html_parser():
+        parser = build_mdit(renderer_cls=RendererHTML, mdformat_opts={'number': True})
+        update_mdit(parser)
+        return parser
+
+    @staticmethod
+    @lru_cache
+    def __markdown_to_markdown_parser():
+        parser = build_mdit(renderer_cls=MDRenderer, mdformat_opts={'number': True})
+        update_mdit(parser)
+        return parser
+
+    @staticmethod
+    def __attributes_as_tuple(link: Token) -> tuple[str, str]:
+        return link.attrs.get('href', link.attrs.get('src')), link.attrs.get('title', '')
+
+    @classmethod
+    def __attributes_as_dict(cls, link: Token) -> dict[str, str]:
+        attributes = cls.__attributes_as_tuple(link)
+        return dict(href=attributes[0], title=attributes[1])
+
+    @classmethod
+    def __get_links(cls, tokens: list[Token]) -> Generator[Token, None, None]:
+        def is_link(token: Token):
+            return token.type == 'link_open' and token.markup != 'autolink'
+
+        def is_image(token: Token):
+            return token.type == 'image'
+
+        last_i = len(tokens) - 1
+        for i, token in enumerate(tokens):
+            if is_link(token) and i < last_i and is_image(tokens[i + 1]):
+                yield tokens[i + 1]
+                yield token
+            elif is_link(token) or is_image(token):
+                yield token
+            yield from cls.__get_links(token.children or [])
 
 
 def html_to_string(element: HtmlElement) -> str:
@@ -577,15 +644,3 @@ def html_to_string(element: HtmlElement) -> str:
 
 def relative_path(path: Path, start: Path):
     return Path(relpath(path, start)).as_posix()
-
-
-@lru_cache
-def markdown_parser():
-    parser = build_mdit(renderer_cls=RendererHTML, mdformat_opts={'number': True})
-    update_mdit(parser)
-    return parser
-
-
-def invalidate_cache():
-    markdown_parser.cache_clear()
-    parse_markdown.cache_clear()
