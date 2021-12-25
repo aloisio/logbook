@@ -97,10 +97,7 @@ _late_init_list = partial(field, compare=False, init=False, default_factory=lamb
 @dataclass(unsafe_hash=True, order=True)
 class Day(Parsable):
     root: Path = field(hash=True, repr=False)
-    year: int = field(init=False, hash=True)
-    month: int = field(init=False, hash=True)
-    day: int = field(init=False, hash=True)
-    date: InitVar[datetime.date]
+    date: field(hash=True)
 
     previous: Optional['Day'] = _late_init_field()
     next: Optional['Day'] = _late_init_field()
@@ -113,11 +110,6 @@ class Day(Parsable):
                                                  r'(?P<mm>[0-9]{2}).'
                                                  r'(?P<dd>[0-9]{2}).'
                                                  r'(?P<md>(?P=yyyy)(?P=mm)(?P=dd)\.md)$')
-
-    def __post_init__(self, date: datetime.date):
-        self.year = date.year
-        self.month = date.month
-        self.day = date.day
 
     @cached_property
     def path(self) -> Path:
@@ -148,6 +140,18 @@ class Day(Parsable):
             cur.previous = prv
 
         return days
+
+    @property
+    def day(self) -> int:
+        return self.date.day
+
+    @property
+    def month(self) -> int:
+        return self.date.month
+
+    @property
+    def year(self) -> int:
+        return self.date.year
 
     class Parser(Parsable.Parser['Day']):
         @cached_property
@@ -397,6 +401,10 @@ class Logbook(Parsable):
             self.footer.template,
             ''
         ])
+
+    def day(self, date: datetime.date) -> Day:
+        year = next((y for y in self.years if y.year == date.year), None)
+        return next((d for d in year.days if d.date == date), None) if year else None
 
     class Parser(Parsable.Parser['Logbook']):
         def parse(self) -> ParseResult:
