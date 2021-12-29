@@ -84,8 +84,8 @@ class TestLogbook:
                                Month(Day(logbook.root, DATE_3))]
         assert year.days == [Day(logbook.root, DATE_2),
                              Day(logbook.root, DATE_3)]
-        assert year.days[0].next == year.days[1]
-        assert year.days[1].previous == year.days[0]
+        assert year.days[0].next[''] == year.days[1]
+        assert year.days[1].previous[''] == year.days[0]
         result = year.parse()
         assert result.valid
         assert not result.errors
@@ -138,21 +138,6 @@ class TestLogbook:
         assert all_months[1].next == all_months[2]
         assert all_months[2].next is None
 
-    def test_parse_valid_creates_linked_days(self, tmp_path):
-        logbook = create_logbook_from_files(tmp_path)
-        assert not logbook.parse().errors
-        all_days = [d for y in logbook.years for d in y.days]
-        assert all_days == [d for y in logbook.years for m in y.months for d in m.days]
-        assert all_days == [Day(logbook.root, DATE_1),
-                            Day(logbook.root, DATE_2),
-                            Day(logbook.root, DATE_3)]
-        assert all_days[0].previous is None
-        assert all_days[1].previous == all_days[0]
-        assert all_days[2].previous == all_days[1]
-        assert all_days[0].next == all_days[1]
-        assert all_days[1].next == all_days[2]
-        assert all_days[2].next is None
-
     def test_parse_valid_creates_month_summaries(self, tmp_path):
         logbook = create_logbook_from_files(tmp_path)
         logbook.parse()
@@ -190,37 +175,58 @@ class TestLogbook:
         assert month_links[2].text == '20'
         assert month_links[2].attrib['href'] == '20/20200820.md'
 
-    def test_parse_valid_creates_days(self, tmp_path):
+    def test_parse_valid_day_links(self, tmp_path):
         logbook = create_logbook_from_files(tmp_path)
-        day = Day(logbook.root, DATE_2)
-        day.previous = Day(logbook.root, DATE_1)
-        day.next = Day(logbook.root, DATE_3)
-        result = day.parse()
-        assert day.template == f'{DayHeader(day, 1).template}\n\n{Footer(day).template}\n'
-        assert result.valid
+        assert not logbook.parse().errors
+        days = [d for y in logbook.years for d in y.days]
+        assert days == [d for y in logbook.years for m in y.months for d in m.days]
+        assert days == [Day(logbook.root, DATE_1),
+                        Day(logbook.root, DATE_2),
+                        Day(logbook.root, DATE_3)]
+
+        assert '' not in days[0].previous
+        assert days[0].next[''] is days[1]
+        assert days[1].previous[''] is days[0]
+        assert days[1].next[''] is days[2]
+        assert days[2].previous[''] is days[1]
+        assert '' not in days[2].next
+
+        assert 'thread' not in days[0].previous
+        assert days[0].next['thread'] is days[2]
+        assert 'thread' not in days[1].previous
+        assert 'thread' not in days[1].next
+        assert days[2].previous['thread'] is days[0]
+        assert 'thread' not in days[2].next
+
+        assert 'lorem' not in days[0].previous
+        assert 'lorem' not in days[0].next
+        assert 'lorem' not in days[1].previous
+        assert 'lorem' not in days[1].next
+        assert 'lorem' not in days[2].previous
+        assert 'lorem' not in days[2].next
 
     def test_parse_valid_day_ids(self, tmp_path):
         logbook = create_logbook_from_files(tmp_path)
-        day = Day(logbook.root, DATE_1)
-        day.next = Day(logbook.root, DATE_2)
-        assert day.parse().valid
-        assert day.ids == ['thread', 'lorem']
+        assert logbook.parse().valid
+        assert logbook.years[0].days[0].ids == ['thread', 'lorem']
+        assert logbook.years[1].days[0].ids == []
+        assert logbook.years[1].days[1].ids == ['thread']
 
-    def test_parse_valid_day_h1(self, tmp_path):
+    def test_parse_valid_day_headers(self, tmp_path):
         logbook = create_logbook_from_files(tmp_path)
-        day1 = Day(logbook.root, DATE_1)
-        day2 = Day(logbook.root, DATE_2)
-        day3 = Day(logbook.root, DATE_3)
-        day1.next = day2
-        day2.previous = day1
-        day2.next = day3
-        day3.previous = day2
-        header1 = DayHeader(day1, 1)
-        header2 = DayHeader(day2, 1)
-        header3 = DayHeader(day3, 1)
-        assert not header1.parse().errors
-        assert not header2.parse().errors
-        assert not header3.parse().errors
+        logbook.parse()
+        day1 = logbook.years[0].days[0]
+        day2 = logbook.years[1].days[0]
+        day3 = logbook.years[1].days[1]
+        assert len(day1.headers) == 2
+        assert day1.headers[0].level == 1
+        assert day1.headers[0].xpath == '/html/body/h1'
+        assert day1.headers[0].ids == []
+        assert day1.headers[1].level == 2
+        assert day1.headers[1].xpath == '/html/body/h2'
+        assert day1.headers[1].ids == ['thread']
+        assert len(day2.headers) == 2
+        assert len(day3.headers) == 3
 
     def test_parse_valid_day_footer(self, tmp_path):
         logbook = create_logbook_from_files(tmp_path)
@@ -240,7 +246,7 @@ class TestLogbook:
         result = day.parse()
         assert ParseError(day.path, 'Markdown file does not exist') in result.errors
 
-    def test_parse_invalid_empty_day_folder(self, tmp_path):
+    def test_parse_invalid_day_empty_directory(self, tmp_path):
         logbook = create_logbook_from_files(tmp_path)
         day = Day(logbook.root, DATE_1)
         day.path.unlink()
@@ -251,51 +257,72 @@ class TestLogbook:
             return re.sub(r'^# .*?\n', '', day_text)
 
         logbook = create_logbook_from_files(tmp_path, remove_header)
-        result = logbook.parse()
-        day = logbook.years[0].days[0]
-        assert ParseError(day.path, 'Missing H1 header') in result.errors
+        errors = logbook.parse().errors
+        path = logbook.years[0].days[0].path
+        assert ParseError(path, 'Missing H1 header') in errors
 
     def test_parse_invalid_day_multiple_h1(self, tmp_path):
         def duplicate_h1(day_text):
             return re.sub(r'^(# .*?\n)', r'\1\1', day_text)
 
         logbook = create_logbook_from_files(tmp_path, duplicate_h1)
-        day = Day(logbook.root, DATE_1)
-        assert ParseError(day.path, 'Multiple H1 headers') in day.parse().errors
+        errors = logbook.parse().errors
+        path = logbook.years[0].days[0].path
+        assert ParseError(path, 'Multiple H1 headers') in errors
+
+    def test_parse_invalid_day_h2_has_multiple_ids(self, tmp_path):
+        def add_id_to_h2(day_text):
+            return re.sub(r'\n(## .*?)\n', r'\n\1 <wbr id=some_id>\n', day_text)
+
+        logbook = create_logbook_from_files(tmp_path, add_id_to_h2)
+        errors = logbook.parse().errors
+        path = logbook.years[0].days[0].path
+        assert ParseError(path, 'Multiple H2 ids: thread, some_id') in errors
 
     def test_parse_invalid_day_missing_footer(self, tmp_path):
         def remove_footer(day_text):
             return re.sub(r'<footer.*?footer>', '', day_text)
 
         logbook = create_logbook_from_files(tmp_path, remove_footer)
-        day = Day(logbook.root, DATE_1)
-        result = day.parse()
-        assert ParseError(day.path, 'Missing footer') in result.errors
+        errors = logbook.parse().errors
+        path = logbook.years[0].days[0].path
+        assert ParseError(path, 'Missing footer') in errors
 
     def test_parse_invalid_day_multiple_footers(self, tmp_path):
         def add_footer(day_text):
             return day_text + '\n<footer><hr></footer>'
 
         logbook = create_logbook_from_files(tmp_path, add_footer)
-        day = Day(logbook.root, DATE_1)
-        result = day.parse()
-        assert ParseError(day.path, 'Multiple footers') in result.errors
+        errors = logbook.parse().errors
+        path = logbook.years[0].days[0].path
+        assert ParseError(path, 'Multiple footers') in errors
 
     def test_parse_invalid_day_h1_not_first_element(self, tmp_path):
         def move_h1_down(day_text):
             return re.sub(r'^(# .*?\n)', r'- Item\n\1', day_text)
 
         logbook = create_logbook_from_files(tmp_path, move_h1_down)
-        header = DayHeader(Day(logbook.root, DATE_1), 1)
-        assert ParseError(header.path, 'H1 header is not first element') in header.parse().errors
+        errors = logbook.parse().errors
+        path = logbook.years[0].days[0].path
+        assert ParseError(path, 'H1 header is not first element') in errors
 
     def test_invalid_day_h1_content(self, tmp_path):
         def invalidate_header(day_text):
-            return re.sub(r'^\(\.\.', '(.', day_text)
+            return re.sub(r'❮', '', day_text)
 
         logbook = create_logbook_from_files(tmp_path, invalidate_header)
-        header = DayHeader(Day(logbook.root, DATE_1), 1)
-        assert ParseError(header.path, 'H1 header content problem') in header.parse().errors
+        errors = logbook.parse().errors
+        path = logbook.years[0].days[0].path
+        assert ParseError(path, 'H1 header content problem') in errors
+
+    def test_invalid_day_h2_missing_links(self, tmp_path):
+        def invalidate_h2(day_text):
+            return re.sub(r'\n## .*?\n', r'\n## Thread <wbr id=thread>\n', day_text)
+
+        logbook = create_logbook_from_files(tmp_path, invalidate_h2)
+        errors = logbook.parse().errors
+        path = logbook.years[0].days[0].path
+        assert ParseError(path, 'H2 header link problem') in errors
 
     def test_parse_invalid_day_footer_missing_rule(self, tmp_path):
         def remove_hr(day_text):
@@ -440,7 +467,7 @@ class TestDayHeader:
     def test_template(self, tmp_path):
         logbook = create_logbook_from_files(tmp_path)
         day = Day(logbook.root, DATE_1)
-        day.next = Day(logbook.root, DATE_2)
+        day.next[''] = Day(logbook.root, DATE_2)
         header = DayHeader(day, 1)
         assert header.template == '# ❮ [2020-08-20](../../2020.md#august) [❯](../../../2021/08/20/20210820.md)'
 

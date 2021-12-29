@@ -2,6 +2,7 @@ import datetime
 import re
 from abc import ABCMeta, abstractmethod
 from calendar import month_name, HTMLCalendar
+from collections import defaultdict
 from dataclasses import dataclass, field, InitVar
 from functools import cached_property, partial, lru_cache
 from itertools import pairwise
@@ -32,7 +33,7 @@ class ParseError:
 
 @dataclass(frozen=True)
 class ParseResult:
-    errors: List[ParseError] = field(default_factory=lambda: [])
+    errors: list[ParseError] = field(default_factory=list)
 
     @property
     def valid(self) -> bool:
@@ -91,7 +92,9 @@ class Parsable(metaclass=ABCMeta):
 
 _late_init_field = partial(field, compare=False, init=False, default=None, hash=False, repr=False)
 
-_late_init_list = partial(field, compare=False, init=False, default_factory=lambda: [], hash=False, repr=False)
+_late_init_list = partial(field, compare=False, init=False, default_factory=list, hash=False, repr=False)
+
+_late_init_dict = partial(field, compare=False, init=False, default_factory=dict, hash=False, repr=False)
 
 
 @dataclass(unsafe_hash=True, order=True)
@@ -99,13 +102,14 @@ class Day(Parsable):
     root: Path = field(hash=True, repr=False)
     date: field(hash=True)
 
-    previous: Optional['Day'] = _late_init_field()
-    next: Optional['Day'] = _late_init_field()
+    previous: dict[str, 'Day'] = _late_init_dict()
+    next: dict[str, 'Day'] = _late_init_dict()
 
     headers: List['DayHeader'] = _late_init_list()
     ids: List['str'] = _late_init_list()
     footer: Optional['Footer'] = _late_init_field()
 
+    ID_XPATH: ClassVar[str] = './/*[@id]/@id'
     PATH_PATTERN: ClassVar[Pattern] = re.compile(r'^(?P<yyyy>[0-9]{4}).'
                                                  r'(?P<mm>[0-9]{2}).'
                                                  r'(?P<dd>[0-9]{2}).'
@@ -128,16 +132,26 @@ class Day(Parsable):
     @staticmethod
     def create(root: Path) -> List['Day']:
         def day(path: Path):
-            return Day(root, datetime.date(int(path.name[0:4]), int(path.name[4:6]), int(path.name[6:8])))
+            new_day = Day(root, datetime.date(int(path.name[0:4]), int(path.name[4:6]), int(path.name[6:8])))
+            new_day.ids = list(map(str, MarkdownParser.markdown_to_html_document(path).xpath(Day.ID_XPATH)))
+            return new_day
 
         def pattern_matches(path: Path):
             return Day.PATH_PATTERN.match(relative_path(path, root))
 
         days = list(map(day, filter(pattern_matches, sorted(root.rglob('*.md')))))
 
-        for prv, cur in pairwise(days):
-            prv.next = cur
-            cur.previous = prv
+        threads = defaultdict(list)
+
+        for day in days:
+            threads[''].append(day)
+            for thread_id in day.ids:
+                threads[thread_id].append(day)
+
+        for thread_id, thread_days in threads.items():
+            for prv, nxt in pairwise(thread_days):
+                prv.next[thread_id] = nxt
+                nxt.previous[thread_id] = prv
 
         return days
 
@@ -171,7 +185,7 @@ class Day(Parsable):
             self.context.headers = [DayHeader(self.context,
                                               int(h.tag[1]),
                                               self.doc.getroottree().getpath(h))
-                                    for h in self.doc.xpath(DayHeader.H1_XPATH)]
+                                    for h in self.doc.xpath(DayHeader.XPATH)]
             if not (h1s := [h for h in self.context.headers if h.level == 1]):
                 self.result.add_error(self.context.path, 'Missing H1 header', DayHeader(self.context, 1).template)
             elif len(h1s) > 1:
@@ -180,7 +194,7 @@ class Day(Parsable):
                 self.result.update(h.parse())
 
         def __parse_ids(self):
-            self.context.ids = [str(i) for i in self.doc.xpath('//*[@id]/@id')]
+            self.context.ids = [str(i) for i in self.doc.xpath(Day.ID_XPATH)]
 
         def __parse_footer(self):
             if not (footers := [Footer(self.context) for _ in self.doc.xpath(Footer.XPATH)]):
@@ -451,6 +465,7 @@ class DayHeader(Parsable):
     day: Day
     level: int
     xpath: Optional[str] = None
+    ids: list[str] = _late_init_list()
 
     H1_XPATH: ClassVar[str] = '/html/body/h1'
     XPATH: ClassVar[str] = f'/html/body/*[{" or ".join(["self::h{}".format(i + 1) for i in range(6)])}]'
@@ -463,21 +478,31 @@ class DayHeader(Parsable):
     def template(self) -> str:
         if self.level == 1:
             return self.__h1_template()
+        else:
+            return self.__h2_to_h6_template()
 
     def __h1_template(self):
         def backward_href():
-            return relative_path(self.day.previous.path, self.day.path.parent)
+            return relative_path(self.day.previous[''].path, self.day.path.parent)
 
         def forward_href():
-            return relative_path(self.day.next.path, self.day.path.parent)
+            return relative_path(self.day.next[''].path, self.day.path.parent)
 
-        backward = '❮' if self.day.previous is None else f'[❮]({backward_href()})'
-        forward = '❯' if self.day.next is None else f'[❯]({forward_href()})'
+        backward = '❮' if '' not in self.day.previous else f'[❮]({backward_href()})'
+        forward = '❯' if '' not in self.day.next else f'[❯]({forward_href()})'
         yyyy = f'{self.day.year:04d}'
         up_text = f'{yyyy}-{self.day.month:02d}-{self.day.day:02d}'
         up_href = f'../../{yyyy}.md#{month_name[self.day.month].lower()}'
         upward = f'[{up_text}]({up_href})'
         return f'# {backward} {upward} {forward}'
+
+    def __h2_to_h6_template(self):
+        thread_id = next(iter(self.ids), None)
+        if thread_id:
+            backward = '❮' if thread_id not in self.day.previous else f'[❮]({relative_path(self.day.previous[thread_id].path, self.day.path.parent)}#{thread_id})'
+            forward = '❯' if thread_id not in self.day.next else f'[❯]({relative_path(self.day.next[thread_id].path, self.day.path.parent)}#{thread_id})'
+            return f'{"#" * self.level} {backward} {{}} {forward} <wbr id={thread_id}>'
+        return f'{"#" * self.level} {{}}'
 
     class Parser(Parsable.Parser['DayHeader']):
         @cached_property
@@ -488,6 +513,8 @@ class DayHeader(Parsable):
             self.result.reset()
             if self.context.level == 1:
                 self.__parse_h1()
+            else:
+                self.__parse_h2_to_h6()
             return self.result
 
         def __parse_h1(self):
@@ -497,7 +524,24 @@ class DayHeader(Parsable):
             else:
                 expected = MarkdownParser.markdown_to_html_fragment(self.context.template)
                 if html_to_string(expected) != html_to_string(actual):
-                    self.result.add_error(self.context.path, 'H1 header content problem', self.context.template)
+                    self.result.add_error(self.context.path, f'H{self.context.level} header content problem',
+                                          self.context.template.format('foobar'))
+
+        def __parse_h2_to_h6(self):
+            actual = self.doc.xpath(self.context.xpath)[0]
+            self.context.ids = list(map(str, actual.xpath(Day.ID_XPATH)))
+            if len(self.context.ids) > 1:
+                self.result.add_error(self.context.path,
+                                      f'Multiple H{self.context.level} ids: {", ".join(self.context.ids)}')
+            else:
+                text_content = actual.text_content().replace('❮', '').replace('❯', '').strip()
+                placeholder = self.context.template.format(text_content)
+                expected = MarkdownParser.markdown_to_html_fragment(placeholder)
+                actual_links = set(map(lambda x: x[2], actual.iterlinks()))
+                expected_links = set(map(lambda x: x[2], expected.iterlinks()))
+                if not expected_links.issubset(actual_links):
+                    self.result.add_error(self.context.path, f'H{self.context.level} header link problem',
+                                          placeholder)
 
 
 @dataclass
