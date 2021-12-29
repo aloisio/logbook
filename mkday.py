@@ -42,7 +42,8 @@ def validate(logbook: Logbook):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('directory', type=Path, default=Path.cwd())
+    parser.add_argument('directory', nargs='?', type=Path,
+                        default=Path.cwd())
     parser.add_argument('-d', '--date', type=datetime.date.fromisoformat,
                         default=datetime.date.today())
     main(parser.parse_args())
