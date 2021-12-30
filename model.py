@@ -423,13 +423,13 @@ class Logbook(Parsable):
     class Parser(Parsable.Parser['Logbook']):
         def parse(self) -> ParseResult:
             self.result.reset()
-            self.__validate_constraints()
-            self.__create_time_entities()
-            self.__parse_dependencies()
-            self.__save_time_entities()
+            if self.__preconditions_satisfied():
+                self.__create_time_entities()
+                self.__parse_dependencies()
+                self.__save_time_entities()
             return self.result
 
-        def __validate_constraints(self):
+        def __preconditions_satisfied(self) -> bool:
             if not (self.context.path.parent / 'style.css').exists():
                 self.result.add_error(self.context.path.parent, 'Missing style.css')
             for root, dirs, files in walk(self.context.root):
@@ -439,6 +439,21 @@ class Logbook(Parsable):
                         continue
                     if not next((dir_path := Path(root) / d).iterdir(), None):
                         self.result.add_error(dir_path, 'Empty directory')
+                for md_file in (f for f in files if f.lower().endswith('.md')):
+                    path = Path(root) / md_file
+                    if markdown_content := self.__read_as_utf8(path):
+                        for link in MarkdownParser.iterlinks(markdown_content):
+                            if 'label' not in link.meta:
+                                self.result.add_error(path, 'Markdown file contains inline links',
+                                                      link.attrs.get('href', link.attrs.get('src')))
+            return self.result.valid
+
+        def __read_as_utf8(self, md_path: Path) -> Optional[str]:
+            try:
+                return md_path.read_text(encoding='utf-8')
+            except UnicodeDecodeError:
+                self.result.add_error(md_path, 'Markdown file encoding is not UTF-8')
+                return None
 
         def __create_time_entities(self):
             days = Day.create(self.context.root)
@@ -544,7 +559,10 @@ class DayHeader(Parsable):
                 expected_link_texts = [a[0].text for a in expected.iterlinks()]
                 pointers_in_wrong_place = not (actual_text.startswith('❮') and actual_text.endswith('❯'))
                 pointers_not_link_texts = actual_link_texts != expected_link_texts
-                if not expected_links.issubset(actual_links):
+                if not expected_links:
+                    self.result.add_error(self.context.path,
+                                          f'H{self.context.level} header has id but no links')
+                elif not expected_links.issubset(actual_links):
                     self.result.add_error(self.context.path,
                                           f'H{self.context.level} header link problem',
                                           placeholder)
@@ -658,17 +676,14 @@ class MarkdownParser:
         return parser.renderer.render(tokens, parser.options, env)
 
     @classmethod
+    def iterlinks(cls, markdown: str) -> Generator[Token, None, None]:
+        return cls.__get_links(cls.__markdown_to_markdown_parser().parse(markdown))
+
+    @classmethod
     def invalidate_cache(cls):
         cls.__markdown_to_html_parser.cache_clear()
         cls.__markdown_to_markdown_parser.cache_clear()
         cls.markdown_to_html_document.cache_clear()
-
-    @staticmethod
-    @lru_cache
-    def __markdown_to_html_parser():
-        parser = build_mdit(renderer_cls=RendererHTML, mdformat_opts={'number': True})
-        update_mdit(parser)
-        return parser
 
     @staticmethod
     @lru_cache
@@ -677,6 +692,13 @@ class MarkdownParser:
         update_mdit(parser)
         parser.options['linkify'] = False
         parser.disable('linkify')
+        return parser
+
+    @staticmethod
+    @lru_cache
+    def __markdown_to_html_parser():
+        parser = build_mdit(renderer_cls=RendererHTML, mdformat_opts={'number': True})
+        update_mdit(parser)
         return parser
 
     @staticmethod

@@ -15,9 +15,9 @@ def main(args: argparse.Namespace):
                 day.path.write_text(MarkdownParser.normalize_markdown('\n'.join(lines)),
                                     encoding='utf-8')
 
-        rewrite_header_1(new_day.previous)
+        rewrite_header_1(new_day.previous.get('', None))
         rewrite_header_1(new_day)
-        rewrite_header_1(new_day.next)
+        rewrite_header_1(new_day.next.get('', None))
 
     old_logbook = Logbook(args.directory)
     validate(old_logbook)
@@ -33,7 +33,7 @@ def validate(logbook: Logbook):
     parse_result = logbook.parse()
     # noinspection PyTypeChecker
     for e in sorted(parse_result.errors):
-        print(f'{e.path.relative_to(logbook.root)}: {e.message}')
+        print(f'{e.path.relative_to(logbook.root).as_posix()}: {e.message}')
         if e.hint:
             print(e.hint)
     if not parse_result.valid:

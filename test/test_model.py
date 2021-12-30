@@ -240,6 +240,24 @@ class TestLogbook:
         (logbook.root / 'style.css').unlink()
         assert ParseError(logbook.root, 'Missing style.css') in logbook.parse().errors
 
+    def test_parse_invalid_markdown_is_not_utf_8(self, tmp_path):
+        logbook = create_logbook_from_files(tmp_path)
+        day_path = logbook.root / DAY_1_RELATIVE_PATH
+        day_path.read_bytes()
+        day_path.write_bytes(day_path.read_bytes().replace(b'Thread', b'ZS \x97 B'))
+        errors = logbook.parse().errors
+        assert ParseError(day_path, 'Markdown file encoding is not UTF-8') in errors
+
+    def test_parse_invalid_markdown_contains_inline_links(self, tmp_path):
+        def inline_link(day_text):
+            inlined = re.sub(r'\[❯]\[2]', '[❯](../../../2021/08/20/20210820.md)', day_text)
+            return re.sub(r'\[2]: .*?\n', '', inlined)
+
+        logbook = create_logbook_from_files(tmp_path, inline_link)
+        errors = logbook.parse().errors
+        path = logbook.root / DAY_1_RELATIVE_PATH
+        assert ParseError(path, 'Markdown file contains inline links') in errors
+
     def test_parse_invalid_day_file_does_not_exist(self, tmp_path):
         logbook = create_logbook_from_files(tmp_path)
         day = Day(logbook.root, datetime.date(2021, 8, 19))
@@ -341,6 +359,16 @@ class TestLogbook:
         errors = logbook.parse().errors
         path = logbook.years[0].days[0].path
         assert ParseError(path, 'H2 header link problem') in errors
+
+    def test_invalid_day_h3_only_one_day_in_thread(self, tmp_path):
+        def invalidate_h2(day_text):
+            return re.sub(r'(\n## .*?\n)', r'\1### ❮ X ❯ <wbr id=x>\n#### Y <wbr id=y>\n', day_text)
+
+        logbook = create_logbook_from_files(tmp_path, invalidate_h2)
+        errors = logbook.parse().errors
+        path = logbook.years[0].days[0].path
+        assert ParseError(path, 'H3 header has id but no links') in errors
+        assert ParseError(path, 'H4 header has id but no links') in errors
 
     def test_parse_invalid_day_footer_missing_rule(self, tmp_path):
         def remove_hr(day_text):
