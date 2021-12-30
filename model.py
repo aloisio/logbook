@@ -529,19 +529,33 @@ class DayHeader(Parsable):
 
         def __parse_h2_to_h6(self):
             actual = self.doc.xpath(self.context.xpath)[0]
+            actual_text = actual.text_content().strip()
             self.context.ids = list(map(str, actual.xpath(Day.ID_XPATH)))
             if len(self.context.ids) > 1:
                 self.result.add_error(self.context.path,
                                       f'Multiple H{self.context.level} ids: {", ".join(self.context.ids)}')
-            else:
-                text_content = actual.text_content().replace('❮', '').replace('❯', '').strip()
-                placeholder = self.context.template.format(text_content)
+            elif len(self.context.ids) == 1:
+                placeholder = self.context.template.format(
+                    actual_text.replace('❮', '').replace('❯', '').strip())
                 expected = MarkdownParser.markdown_to_html_fragment(placeholder)
-                actual_links = set(map(lambda x: x[2], actual.iterlinks()))
-                expected_links = set(map(lambda x: x[2], expected.iterlinks()))
+                actual_links = {a[2] for a in actual.iterlinks()}
+                expected_links = {a[2] for a in expected.iterlinks()}
+                actual_link_texts = [a[0].text for a in actual.iterlinks() if a[2] in expected_links]
+                expected_link_texts = [a[0].text for a in expected.iterlinks()]
+                pointers_in_wrong_place = not (actual_text.startswith('❮') and actual_text.endswith('❯'))
+                pointers_not_link_texts = actual_link_texts != expected_link_texts
                 if not expected_links.issubset(actual_links):
-                    self.result.add_error(self.context.path, f'H{self.context.level} header link problem',
+                    self.result.add_error(self.context.path,
+                                          f'H{self.context.level} header link problem',
                                           placeholder)
+                elif pointers_in_wrong_place or pointers_not_link_texts:
+                    self.result.add_error(self.context.path,
+                                          f'H{self.context.level} header pointer problem',
+                                          placeholder)
+            else:
+                if '❮' in actual_text or '❯' in actual_text:
+                    self.result.add_error(self.context.path,
+                                          f'H{self.context.level} header has pointer but no ID')
 
 
 @dataclass
@@ -661,6 +675,8 @@ class MarkdownParser:
     def __markdown_to_markdown_parser():
         parser = build_mdit(renderer_cls=MDRenderer, mdformat_opts={'number': True})
         update_mdit(parser)
+        parser.options['linkify'] = False
+        parser.disable('linkify')
         return parser
 
     @staticmethod

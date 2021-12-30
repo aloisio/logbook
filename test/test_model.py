@@ -315,9 +315,27 @@ class TestLogbook:
         path = logbook.years[0].days[0].path
         assert ParseError(path, 'H1 header content problem') in errors
 
+    def test_invalid_day_h2_wrong_pointers(self, tmp_path):
+        def invalidate_h2(day_text):
+            return re.sub(r'\n## ❮', '\n## <', day_text)
+
+        logbook = create_logbook_from_files(tmp_path, invalidate_h2)
+        errors = logbook.parse().errors
+        path = logbook.years[0].days[0].path
+        assert ParseError(path, 'H2 header pointer problem') in errors
+
+    def test_invalid_day_h2_pointer_without_id(self, tmp_path):
+        def invalidate_h2(day_text):
+            return re.sub(r'\n(## .*?)\n', r'\n\1\n### ❮ Dangling Pointers ❯\n', day_text)
+
+        logbook = create_logbook_from_files(tmp_path, invalidate_h2)
+        errors = logbook.parse().errors
+        path = logbook.years[0].days[0].path
+        assert ParseError(path, 'H3 header has pointer but no ID') in errors
+
     def test_invalid_day_h2_missing_links(self, tmp_path):
         def invalidate_h2(day_text):
-            return re.sub(r'\n## .*?\n', r'\n## Thread <wbr id=thread>\n', day_text)
+            return re.sub(r'\n## .*?\n', r'\n## ❮ Thread ❯ <wbr id=thread>\n', day_text)
 
         logbook = create_logbook_from_files(tmp_path, invalidate_h2)
         errors = logbook.parse().errors
@@ -709,6 +727,15 @@ class TestMarkdownParser:
                 [1]: image.jpg "title"
                 [2]: external.md
                 [3]: list_of_figures.md
+            ''')
+
+    def test_do_not_linkify(self):
+        self.assert_normalized_markdown(
+            '''
+                - List all available workflows (Workpace.ID = 1)
+            ''',
+            '''
+                - List all available workflows (Workpace.ID = 1)
             ''')
 
     @staticmethod
