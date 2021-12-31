@@ -446,6 +446,7 @@ class Logbook(Parsable):
                             if 'label' not in link.meta:
                                 self.result.add_error(path, 'Markdown file contains inline links',
                                                       link.attrs.get('href', link.attrs.get('src')))
+                                break
             return self.result.valid
 
         def __read_as_utf8(self, md_path: Path) -> Optional[str]:
@@ -559,14 +560,14 @@ class DayHeader(Parsable):
                 expected_link_texts = [a[0].text for a in expected.iterlinks()]
                 pointers_in_wrong_place = not (actual_text.startswith('❮') and actual_text.endswith('❯'))
                 pointers_not_link_texts = actual_link_texts != expected_link_texts
-                if not expected_links:
+                if not expected_links and ('❯' in actual_text or '❯' in actual_text):
                     self.result.add_error(self.context.path,
                                           f'H{self.context.level} header has id but no links')
-                elif not expected_links.issubset(actual_links):
+                elif expected_links and not expected_links.issubset(actual_links):
                     self.result.add_error(self.context.path,
                                           f'H{self.context.level} header link problem',
                                           placeholder)
-                elif pointers_in_wrong_place or pointers_not_link_texts:
+                elif expected_links and pointers_in_wrong_place or pointers_not_link_texts:
                     self.result.add_error(self.context.path,
                                           f'H{self.context.level} header pointer problem',
                                           placeholder)

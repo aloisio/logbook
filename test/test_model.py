@@ -214,7 +214,7 @@ class TestLogbook:
 
     def test_parse_valid_day_headers(self, tmp_path):
         logbook = create_logbook_from_files(tmp_path)
-        logbook.parse()
+        assert logbook.parse().valid
         day1 = logbook.years[0].days[0]
         day2 = logbook.years[1].days[0]
         day3 = logbook.years[1].days[1]
@@ -227,6 +227,13 @@ class TestLogbook:
         assert day1.headers[1].ids == ['thread']
         assert len(day2.headers) == 2
         assert len(day3.headers) == 3
+
+    def test_valid_day_header_only_one_day_in_thread(self, tmp_path):
+        def header_with_id_and_no_links(day_text):
+            return re.sub(r'(\n## .*?\n)', r'\1### Y <wbr id=y>\n', day_text)
+
+        logbook = create_logbook_from_files(tmp_path, header_with_id_and_no_links)
+        assert logbook.parse().valid
 
     def test_parse_valid_day_footer(self, tmp_path):
         logbook = create_logbook_from_files(tmp_path)
@@ -361,14 +368,13 @@ class TestLogbook:
         assert ParseError(path, 'H2 header link problem') in errors
 
     def test_invalid_day_h3_only_one_day_in_thread(self, tmp_path):
-        def invalidate_h2(day_text):
-            return re.sub(r'(\n## .*?\n)', r'\1### ❮ X ❯ <wbr id=x>\n#### Y <wbr id=y>\n', day_text)
+        def header_pointers_one_day_thread(day_text):
+            return re.sub(r'(\n## .*?\n)', r'\1### ❮ X ❯ <wbr id=x>\n', day_text)
 
-        logbook = create_logbook_from_files(tmp_path, invalidate_h2)
+        logbook = create_logbook_from_files(tmp_path, header_pointers_one_day_thread)
         errors = logbook.parse().errors
         path = logbook.years[0].days[0].path
         assert ParseError(path, 'H3 header has id but no links') in errors
-        assert ParseError(path, 'H4 header has id but no links') in errors
 
     def test_parse_invalid_day_footer_missing_rule(self, tmp_path):
         def remove_hr(day_text):
