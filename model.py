@@ -424,12 +424,21 @@ class Logbook(Parsable):
         def parse(self) -> ParseResult:
             self.result.reset()
             if self.__preconditions_satisfied():
+                self.__validate_constraints()
                 self.__create_time_entities()
                 self.__parse_dependencies()
                 self.__save_time_entities()
             return self.result
 
         def __preconditions_satisfied(self) -> bool:
+            for markdown_path in self.context.root.rglob('*.md'):
+                try:
+                    MarkdownParser.normalize_markdown(markdown_path.read_text(encoding='utf-8'))
+                except UnicodeDecodeError:
+                    self.result.add_error(markdown_path, 'Markdown file encoding is not UTF-8')
+            return self.result.valid
+
+        def __validate_constraints(self):
             if not (self.context.path.parent / 'style.css').exists():
                 self.result.add_error(self.context.path.parent, 'Missing style.css')
             for root, dirs, files in walk(self.context.root):
@@ -441,13 +450,11 @@ class Logbook(Parsable):
                         self.result.add_error(dir_path, 'Empty directory')
                 for md_file in (f for f in files if f.lower().endswith('.md')):
                     path = Path(root) / md_file
-                    if markdown_content := self.__read_as_utf8(path):
-                        for link in MarkdownParser.iterlinks(markdown_content):
-                            if 'label' not in link.meta:
-                                self.result.add_error(path, 'Markdown file contains inline links',
-                                                      link.attrs.get('href', link.attrs.get('src')))
-                                break
-            return self.result.valid
+                    for link in MarkdownParser.iterlinks(path.read_text(encoding='utf-8')):
+                        if 'label' not in link.meta:
+                            self.result.add_error(path, 'Markdown file contains inline links',
+                                                  link.attrs.get('href', link.attrs.get('src')))
+                            break
 
         def __read_as_utf8(self, md_path: Path) -> Optional[str]:
             try:
@@ -513,11 +520,23 @@ class DayHeader(Parsable):
         return f'# {backward} {upward} {forward}'
 
     def __h2_to_h6_template(self):
+        def backward(_thread_id):
+            if not (_thread_id in self.day.next or _thread_id in self.day.previous):
+                return ''
+            if _thread_id not in self.day.previous:
+                return '❮'
+            return f'[❮]({relative_path(self.day.previous[_thread_id].path, self.day.path.parent)}#{_thread_id})'
+
+        def forward(_thread_id):
+            if not (_thread_id in self.day.next or _thread_id in self.day.previous):
+                return ''
+            if _thread_id not in self.day.next:
+                return '❯'
+            return f'[❯]({relative_path(self.day.next[thread_id].path, self.day.path.parent)}#{thread_id})'
+
         thread_id = next(iter(self.ids), None)
         if thread_id:
-            backward = '❮' if thread_id not in self.day.previous else f'[❮]({relative_path(self.day.previous[thread_id].path, self.day.path.parent)}#{thread_id})'
-            forward = '❯' if thread_id not in self.day.next else f'[❯]({relative_path(self.day.next[thread_id].path, self.day.path.parent)}#{thread_id})'
-            return f'{"#" * self.level} {backward} {{}} {forward} <wbr id={thread_id}>'
+            return f'{"#" * self.level} {backward(thread_id)} {{}} {forward(thread_id)} <wbr id={thread_id}>'
         return f'{"#" * self.level} {{}}'
 
     class Parser(Parsable.Parser['DayHeader']):
@@ -562,7 +581,8 @@ class DayHeader(Parsable):
                 pointers_not_link_texts = actual_link_texts != expected_link_texts
                 if not expected_links and ('❯' in actual_text or '❯' in actual_text):
                     self.result.add_error(self.context.path,
-                                          f'H{self.context.level} header has id but no links')
+                                          f'H{self.context.level} header has id but no day links',
+                                          placeholder)
                 elif expected_links and not expected_links.issubset(actual_links):
                     self.result.add_error(self.context.path,
                                           f'H{self.context.level} header link problem',
@@ -575,6 +595,38 @@ class DayHeader(Parsable):
                 if '❮' in actual_text or '❯' in actual_text:
                     self.result.add_error(self.context.path,
                                           f'H{self.context.level} header has pointer but no ID')
+
+
+@dataclass(order=True)
+class Footer(Parsable):
+    container: Union[Logbook, Year, Month, Day]
+
+    XPATH: ClassVar[str] = '/html/body/footer'
+
+    @cached_property
+    def path(self) -> Path:
+        return self.container.path
+
+    @cached_property
+    def template(self) -> str:
+        style_href = relative_path(self.container.root / 'style.css', self.path.parent)
+        return f'<footer><link href={style_href} rel=stylesheet><hr></footer>'
+
+    class Parser(Parsable.Parser['Footer']):
+
+        @cached_property
+        def doc(self):
+            return MarkdownParser.markdown_to_html_document(self.context.path)
+
+        def parse(self) -> ParseResult:
+            self.result.reset()
+            footer = self.doc.xpath(self.context.XPATH)[0]
+            if footer.getnext() is not None:
+                self.result.add_error(self.context.path, 'Footer is not last element')
+            elif html_to_string(MarkdownParser.markdown_to_html_fragment(self.context.template)) != html_to_string(
+                    footer):
+                self.result.add_error(self.context.path, 'Footer content problem', self.context.template)
+            return self.result
 
 
 @dataclass
@@ -614,38 +666,6 @@ class YearHeader:
         forward = f'<a href={forward_href()}>❯</a>' if self.year.next else '❯'
         upward = f'<a href=../index.md>{yyyy}</a>'
         return f'<th colspan=3>{backward} {upward} {forward}</th>'
-
-
-@dataclass(order=True)
-class Footer(Parsable):
-    container: Union[Logbook, Year, Month, Day]
-
-    XPATH: ClassVar[str] = '/html/body/footer'
-
-    @cached_property
-    def path(self) -> Path:
-        return self.container.path
-
-    @cached_property
-    def template(self) -> str:
-        style_href = relative_path(self.container.root / 'style.css', self.path.parent)
-        return f'<footer><link href={style_href} rel=stylesheet><hr></footer>'
-
-    class Parser(Parsable.Parser['Footer']):
-
-        @cached_property
-        def doc(self):
-            return MarkdownParser.markdown_to_html_document(self.context.path)
-
-        def parse(self) -> ParseResult:
-            self.result.reset()
-            footer = self.doc.xpath(self.context.XPATH)[0]
-            if footer.getnext() is not None:
-                self.result.add_error(self.context.path, 'Footer is not last element')
-            elif html_to_string(MarkdownParser.markdown_to_html_fragment(self.context.template)) != html_to_string(
-                    footer):
-                self.result.add_error(self.context.path, 'Footer content problem', self.context.template)
-            return self.result
 
 
 class MarkdownParser:

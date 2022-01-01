@@ -374,7 +374,7 @@ class TestLogbook:
         logbook = create_logbook_from_files(tmp_path, header_pointers_one_day_thread)
         errors = logbook.parse().errors
         path = logbook.years[0].days[0].path
-        assert ParseError(path, 'H3 header has id but no links') in errors
+        assert ParseError(path, 'H3 header has id but no day links') in errors
 
     def test_parse_invalid_day_footer_missing_rule(self, tmp_path):
         def remove_hr(day_text):
