@@ -133,7 +133,10 @@ class Day(Parsable):
     def create(root: Path) -> List['Day']:
         def day(path: Path):
             new_day = Day(root, datetime.date(int(path.name[0:4]), int(path.name[4:6]), int(path.name[6:8])))
-            new_day.ids = list(map(str, MarkdownParser.markdown_to_html_document(path).xpath(Day.ID_XPATH)))
+            try:
+                new_day.ids = [str(i) for i in MarkdownParser.markdown_to_html_document(path).xpath(Day.ID_XPATH)]
+            except UnicodeDecodeError:
+                new_day.ids = []
             return new_day
 
         def pattern_matches(path: Path):
@@ -176,10 +179,24 @@ class Day(Parsable):
             self.result.reset()
             if not self.context.path.exists():
                 return self.result.add_error(self.context.path, 'Markdown file does not exist')
-            self.__parse_headers()
-            self.__parse_ids()
-            self.__parse_footer()
-            return self.result
+            try:
+                self.__parse_links()
+                self.__parse_ids()
+                self.__parse_headers()
+                self.__parse_footer()
+                return self.result
+            except UnicodeDecodeError:
+                return self.result.add_error(self.context.path, 'Markdown file encoding is not UTF-8')
+
+        def __parse_links(self):
+            for link in MarkdownParser.iterlinks(self.context.path):
+                if 'label' not in link.meta:
+                    self.result.add_error(self.context.path, 'Markdown file contains inline links',
+                                          link.attrs.get('href', link.attrs.get('src')))
+                    break
+
+        def __parse_ids(self):
+            self.context.ids = [str(i) for i in self.doc.xpath(Day.ID_XPATH)]
 
         def __parse_headers(self):
             self.context.headers = [DayHeader(self.context,
@@ -192,9 +209,6 @@ class Day(Parsable):
                 self.result.add_error(self.context.path, 'Multiple H1 headers', DayHeader(self.context, 1).template)
             for h in self.context.headers:
                 self.result.update(h.parse())
-
-        def __parse_ids(self):
-            self.context.ids = [str(i) for i in self.doc.xpath(Day.ID_XPATH)]
 
         def __parse_footer(self):
             if not (footers := [Footer(self.context) for _ in self.doc.xpath(Footer.XPATH)]):
@@ -423,20 +437,11 @@ class Logbook(Parsable):
     class Parser(Parsable.Parser['Logbook']):
         def parse(self) -> ParseResult:
             self.result.reset()
-            if self.__preconditions_satisfied():
-                self.__validate_constraints()
-                self.__create_time_entities()
-                self.__parse_dependencies()
-                self.__save_time_entities()
+            self.__validate_constraints()
+            self.__create_time_entities()
+            self.__parse_dependencies()
+            self.__save_time_entities()
             return self.result
-
-        def __preconditions_satisfied(self) -> bool:
-            for markdown_path in self.context.root.rglob('*.md'):
-                try:
-                    MarkdownParser.normalize_markdown(markdown_path.read_text(encoding='utf-8'))
-                except UnicodeDecodeError:
-                    self.result.add_error(markdown_path, 'Markdown file encoding is not UTF-8')
-            return self.result.valid
 
         def __validate_constraints(self):
             if not (self.context.path.parent / 'style.css').exists():
@@ -448,13 +453,6 @@ class Logbook(Parsable):
                         continue
                     if not next((dir_path := Path(root) / d).iterdir(), None):
                         self.result.add_error(dir_path, 'Empty directory')
-                for md_file in (f for f in files if f.lower().endswith('.md')):
-                    path = Path(root) / md_file
-                    for link in MarkdownParser.iterlinks(path.read_text(encoding='utf-8')):
-                        if 'label' not in link.meta:
-                            self.result.add_error(path, 'Markdown file contains inline links',
-                                                  link.attrs.get('href', link.attrs.get('src')))
-                            break
 
         def __read_as_utf8(self, md_path: Path) -> Optional[str]:
             try:
@@ -697,7 +695,8 @@ class MarkdownParser:
         return parser.renderer.render(tokens, parser.options, env)
 
     @classmethod
-    def iterlinks(cls, markdown: str) -> Generator[Token, None, None]:
+    def iterlinks(cls, markdown_path: Path) -> Generator[Token, None, None]:
+        markdown = markdown_path.read_text(encoding='utf-8')
         return cls.__get_links(cls.__markdown_to_markdown_parser().parse(markdown))
 
     @classmethod
