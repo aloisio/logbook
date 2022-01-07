@@ -109,6 +109,7 @@ class Day(Parsable):
     ids: List['str'] = _late_init_list()
     footer: Optional['Footer'] = _late_init_field()
 
+    ID_PATTERN: ClassVar[Pattern] = re.compile(rb'<\w+?[^>]+?id\s*=\s*(\S+?)[\s/>]')
     ID_XPATH: ClassVar[str] = './/*[@id]/@id'
     PATH_PATTERN: ClassVar[Pattern] = re.compile(r'^(?P<yyyy>[0-9]{4}).'
                                                  r'(?P<mm>[0-9]{2}).'
@@ -133,10 +134,8 @@ class Day(Parsable):
     def create(root: Path) -> List['Day']:
         def day(path: Path):
             new_day = Day(root, datetime.date(int(path.name[0:4]), int(path.name[4:6]), int(path.name[6:8])))
-            try:
-                new_day.ids = [str(i) for i in MarkdownParser.markdown_to_html_document(path).xpath(Day.ID_XPATH)]
-            except UnicodeDecodeError:
-                new_day.ids = []
+            new_day.ids = [i.decode('utf-8', 'ignore') for i in
+                           Day.ID_PATTERN.findall(path.read_bytes())]
             return new_day
 
         def pattern_matches(path: Path):
