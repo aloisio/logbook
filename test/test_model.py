@@ -1,6 +1,7 @@
 import datetime
 import re
 import shutil
+from functools import partial
 from pathlib import Path
 from textwrap import dedent
 from typing import Callable
@@ -228,12 +229,23 @@ class TestLogbook:
         assert len(day2.headers) == 2
         assert len(day3.headers) == 3
 
-    def test_valid_day_header_only_one_day_in_thread(self, tmp_path):
+    def test_parse_valid_day_header_only_one_day_in_thread(self, tmp_path):
         def header_with_id_and_no_links(day_text):
             return re.sub(r'(\n## .*?\n)', r'\1### Y <wbr id=y>\n', day_text)
 
         logbook = create_logbook_from_files(tmp_path, header_with_id_and_no_links)
         assert logbook.parse().valid
+
+    def test_parse_valid_day_valid_header_order(self, tmp_path_factory):
+        def valid_header_order(order: list[int], day_text):
+            extra = '\n'.join(f'{"#" * i} Header {i}' for i in order)
+            return re.sub(r'(\n<footer.*?>\n)', fr'\n{extra}\n\1', day_text)
+
+        valid_headers = [[2], [3], [3, 4], [2, 3], [2, 3, 4, 2, 3], [3, 4, 5, 5], [2, 3, 4, 5, 3]]
+        for index, headers in enumerate(valid_headers):
+            logbook = create_logbook_from_files(tmp_path_factory.mktemp(f'{index}'),
+                                                partial(valid_header_order, headers))
+            assert logbook.parse().valid, str(headers)
 
     def test_parse_valid_day_footer(self, tmp_path):
         logbook = create_logbook_from_files(tmp_path)
@@ -376,6 +388,18 @@ class TestLogbook:
         path = logbook.years[0].days[0].path
         assert ParseError(path, 'H3 header has id but no day links') in errors
 
+    def test_parse_invalid_day_invalid_header_order(self, tmp_path_factory):
+        def invalid_header_order(order: list[int], _):
+            return '\n'.join(f'{"#" * i} Header {i}' for i in order)
+
+        invalid_Headers = [[2, 1], [1, 3], [1, 4], [1, 2, 4], [1, 2, 5], [1, 2, 3, 5], [1, 2, 3, 2, 4],
+                           [1, 2, 3, 2, 3, 4, 2, 4], [1, 2, 2, 3, 5, 2, 3], [1, 2, 3, 4, 2, 3, 4, 6, 2]]
+        for i, headers in enumerate(invalid_Headers):
+            logbook = create_logbook_from_files(tmp_path_factory.mktemp(f'{i}'), partial(invalid_header_order, headers))
+            errors = logbook.parse().errors
+            path = logbook.years[0].days[0].path
+            assert ParseError(path, 'Header order problem') in errors
+
     def test_parse_invalid_day_footer_missing_rule(self, tmp_path):
         def remove_hr(day_text):
             return re.sub(r'<footer.*?footer>', '<footer></footer>', day_text)
@@ -439,6 +463,15 @@ class TestLogbook:
         logbook = create_logbook_from_files(tmp_path, add_content)
         footer = Footer(Day(logbook.root, DATE_1))
         assert ParseError(footer.path, 'Footer is not last element') in footer.parse().errors
+
+    def test_parse_invalid_day_repeated_ids(self, tmp_path):
+        def repeat_id(day_text):
+            return re.sub(r'(Maecenas)', r'<a id=thread>\1</a>', day_text)
+
+        logbook = create_logbook_from_files(tmp_path, repeat_id)
+        errors = logbook.parse().errors
+        path = logbook.years[0].days[0].path
+        assert ParseError(path, 'Repeated id') in errors
 
 
 class TestYear:
@@ -513,14 +546,14 @@ class TestDay:
 class TestDayHeader:
     def test_dataclass(self, tmp_path):
         logbook = create_logbook_from_files(tmp_path)
-        header1 = DayHeader(Day(logbook.root, DATE_2), 1)
-        assert header1 == DayHeader(Day(logbook.root, DATE_2), 1)
+        header1 = DayHeader(Day(logbook.root, DATE_2), 1, DayHeader.H1_XPATH)
+        assert header1 == DayHeader(Day(logbook.root, DATE_2), 1, DayHeader.H1_XPATH)
 
     def test_template(self, tmp_path):
         logbook = create_logbook_from_files(tmp_path)
         day = Day(logbook.root, DATE_1)
         day.next[''] = Day(logbook.root, DATE_2)
-        header = DayHeader(day, 1)
+        header = DayHeader(day, 1, DayHeader.H1_XPATH)
         assert header.template == '# ❮ [2020-08-20](../../2020.md#august) [❯](../../../2021/08/20/20210820.md)'
 
 
@@ -626,6 +659,7 @@ def test_lxml_471_emoji_bug():
 
 
 def create_logbook_from_files(root: Path, day_mutator: Callable[[str], str] = lambda s: s):
+    MarkdownParser.invalidate_cache()
     logbook_path = root / 'logbook'
     shutil.copytree(TEST_ROOT / 'resources', logbook_path)
     day_path = logbook_path / DAY_1_RELATIVE_PATH

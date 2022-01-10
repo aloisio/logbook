@@ -124,7 +124,7 @@ class Day(Parsable):
     @cached_property
     def template(self) -> str:
         return '\n'.join([
-            DayHeader(self, 1).template,
+            DayHeader(self, 1, DayHeader.H1_XPATH).template,
             '',
             Footer(self).template,
             ''
@@ -134,8 +134,8 @@ class Day(Parsable):
     def create(root: Path) -> List['Day']:
         def day(path: Path):
             new_day = Day(root, datetime.date(int(path.name[0:4]), int(path.name[4:6]), int(path.name[6:8])))
-            new_day.ids = [i.decode('utf-8', 'ignore') for i in
-                           Day.ID_PATTERN.findall(path.read_bytes())]
+            ids = [i.decode('utf-8', 'ignore') for i in Day.ID_PATTERN.findall(path.read_bytes())]
+            new_day.ids = list(dict.fromkeys(ids))
             return new_day
 
         def pattern_matches(path: Path):
@@ -195,7 +195,11 @@ class Day(Parsable):
                     break
 
         def __parse_ids(self):
-            self.context.ids = [str(i) for i in self.doc.xpath(Day.ID_XPATH)]
+            ids = [str(i) for i in self.doc.xpath(Day.ID_XPATH)]
+            self.context.ids = list(dict.fromkeys(ids))
+            repeated = {x for x in ids if ids.count(x) > 1}
+            if repeated:
+                self.result.add_error(self.context.path, 'Repeated id', ', '.join(repeated))
 
         def __parse_headers(self):
             self.context.headers = [DayHeader(self.context,
@@ -203,9 +207,20 @@ class Day(Parsable):
                                               self.doc.getroottree().getpath(h))
                                     for h in self.doc.xpath(DayHeader.XPATH)]
             if not (h1s := [h for h in self.context.headers if h.level == 1]):
-                self.result.add_error(self.context.path, 'Missing H1 header', DayHeader(self.context, 1).template)
+                self.result.add_error(self.context.path, 'Missing H1 header',
+                                      DayHeader(self.context, 1, DayHeader.H1_XPATH).template)
             elif len(h1s) > 1:
-                self.result.add_error(self.context.path, 'Multiple H1 headers', DayHeader(self.context, 1).template)
+                self.result.add_error(self.context.path, 'Multiple H1 headers',
+                                      DayHeader(self.context, 1, DayHeader.H1_XPATH).template)
+            if self.result.valid:
+                levels = [h.level for h in self.context.headers]
+                largest = 0
+                for level in levels:
+                    if largest == level - 1 or largest >= level:
+                        largest = level
+                    else:
+                        self.result.add_error(self.context.path, 'Header order problem')
+                        break
             for h in self.context.headers:
                 self.result.update(h.parse())
 
@@ -484,7 +499,7 @@ class Logbook(Parsable):
 class DayHeader(Parsable):
     day: Day
     level: int
-    xpath: Optional[str] = None
+    xpath: str
     ids: list[str] = _late_init_list()
 
     H1_XPATH: ClassVar[str] = '/html/body/h1'
@@ -731,11 +746,11 @@ class MarkdownParser:
 
     @classmethod
     def __get_links(cls, tokens: list[Token]) -> Generator[Token, None, None]:
-        def is_link(token: Token):
-            return token.type == 'link_open' and token.markup != 'autolink'
+        def is_link(_token: Token):
+            return _token.type == 'link_open' and _token.markup != 'autolink'
 
-        def is_image(token: Token):
-            return token.type == 'image'
+        def is_image(_token: Token):
+            return _token.type == 'image'
 
         last_i = len(tokens) - 1
         for i, token in enumerate(tokens):
