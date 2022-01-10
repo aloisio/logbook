@@ -219,7 +219,8 @@ class Day(Parsable):
                     if largest == level - 1 or largest >= level:
                         largest = level
                     else:
-                        self.result.add_error(self.context.path, 'Header order problem')
+                        self.result.add_error(self.context.path, 'Header order problem',
+                                              ', '.join(f'H{i}' for i in levels))
                         break
             for h in self.context.headers:
                 self.result.update(h.parse())
