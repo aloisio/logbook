@@ -446,8 +446,15 @@ class Logbook(Parsable):
         ])
 
     def day(self, date: datetime.date) -> Day:
-        year = next((y for y in self.years if y.year == date.year), None)
+        year = self.year(date)
         return next((d for d in year.days if d.date == date), None) if year else None
+
+    def month(self, date: datetime.date) -> Month:
+        year = self.year(date)
+        return next((m for m in year.months if m.month == date.month), None) if year else None
+
+    def year(self, date: datetime.date) -> Year:
+        return next((y for y in self.years if y.year == date.year), None)
 
     class Parser(Parsable.Parser['Logbook']):
         def parse(self) -> ParseResult:

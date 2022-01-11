@@ -41,6 +41,18 @@ class TestLogbook:
         assert logbook.day(DATE_2) == logbook.years[1].days[0]
         assert logbook.day(datetime.date(2020, 8, 8)) is None
 
+    def test_find_month_by_date(self, tmp_path):
+        logbook = create_logbook_from_files(tmp_path)
+        logbook.parse()
+        assert logbook.month(DATE_2) == logbook.years[1].months[0]
+        assert logbook.month(datetime.date(2020, 7, 8)) is None
+
+    def test_find_year_by_date(self, tmp_path):
+        logbook = create_logbook_from_files(tmp_path)
+        logbook.parse()
+        assert logbook.year(DATE_2) == logbook.years[1]
+        assert logbook.year(datetime.date(2018, 8, 20)) is None
+
     def test_parse_valid(self, tmp_path):
         logbook = create_logbook_from_files(tmp_path)
         assert (result := logbook.parse()).valid

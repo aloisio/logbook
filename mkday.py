@@ -27,6 +27,9 @@ def main(args: argparse.Namespace):
         new_logbook = Logbook(args.directory)
         new_logbook.parse()
         adjust_markdown(new_logbook.day(args.date))
+        new_logbook.month(args.date).save()
+        new_logbook.year(args.date).save()
+        new_logbook.save()
 
 
 def validate(logbook: Logbook):
