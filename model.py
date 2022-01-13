@@ -593,17 +593,20 @@ class DayHeader(Parsable):
                 placeholder = self.context.template.format(
                     actual_text.replace('❮', '').replace('❯', '').strip())
                 expected = MarkdownParser.markdown_to_html_fragment(placeholder)
-                actual_links = {a[2] for a in actual.iterlinks()}
-                expected_links = {a[2] for a in expected.iterlinks()}
-                actual_link_texts = [a[0].text for a in actual.iterlinks() if a[2] in expected_links]
-                expected_link_texts = [a[0].text for a in expected.iterlinks()]
+                actual_links = {a[0].text: a[2] for a in actual.iterlinks() if a[0].text in ['❮', '❯']}
+                expected_links = {a[0].text: a[2] for a in expected.iterlinks()}
+                actual_link_texts = actual_links.keys()
+                expected_link_texts = expected_links.keys()
                 pointers_in_wrong_place = not (actual_text.startswith('❮') and actual_text.endswith('❯'))
                 pointers_not_link_texts = actual_link_texts != expected_link_texts
+                for a in actual.iterlinks():
+                    if a[0].text.strip() not in ['❮', '❯']:
+                        placeholder = placeholder.replace(a[0].text, f'[{a[0].text}]({a[2]})')
                 if not expected_links and ('❯' in actual_text or '❯' in actual_text):
                     self.result.add_error(self.context.path,
                                           f'H{self.context.level} header has id but no day links',
                                           placeholder)
-                elif expected_links and not expected_links.issubset(actual_links):
+                elif expected_links and expected_links != actual_links:
                     self.result.add_error(self.context.path,
                                           f'H{self.context.level} header link problem',
                                           placeholder)
