@@ -1,5 +1,6 @@
 import argparse
 import sys
+from collections import defaultdict
 from pathlib import Path
 
 from model import Logbook
@@ -11,11 +12,16 @@ def main(args: argparse.Namespace):
 
 def validate(logbook: Logbook):
     parse_result = logbook.parse()
+    errors = defaultdict(list)
     # noinspection PyTypeChecker
     for e in sorted(parse_result.errors):
-        print(f'> {e.path.relative_to(logbook.root).as_posix()}: {e.message}')
-        if e.hint:
-            print(e.hint)
+        errors[e.path].append(e)
+    for errs in errors.values():
+        print(f'[{errs[0].path.relative_to(logbook.root).as_posix()}]')
+        for e in errs:
+            print(f'> {e.message}')
+            if e.hint:
+                print(e.hint)
     if not parse_result.valid:
         sys.exit(1)
 

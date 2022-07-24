@@ -663,7 +663,8 @@ def test_lxml_471_emoji_bug():
         doc = document_fromstring(transform(content))
         assert doc[0][0].text == '\U0001F926\u200D\u2640\uFE0F'
 
-    assert_emoji_parsing(lambda c: c)
+    with pytest.raises(Exception):
+        assert_emoji_parsing(lambda c: c)
     with pytest.raises(Exception):
         assert_emoji_parsing(lambda c: c.encode('utf-8'))
     assert_emoji_parsing(lambda c: c.encode('utf-16'))

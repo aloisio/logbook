@@ -600,8 +600,10 @@ class DayHeader(Parsable):
                 pointers_in_wrong_place = not (actual_text.startswith('❮') and actual_text.endswith('❯'))
                 pointers_not_link_texts = actual_link_texts != expected_link_texts
                 for a in actual.iterlinks():
-                    if a[0].text.strip() not in ['❮', '❯']:
-                        placeholder = placeholder.replace(a[0].text, f'[{a[0].text}]({a[2]})')
+                    if a[0].text.strip() not in ['❮', '❯'] and len(re.findall(a[0].text, placeholder)) == 1:
+                        title = a[0].attrib.get('title', '').strip()
+                        link_target = f'{a[2]} "{title}"' if title else a[2]
+                        placeholder = placeholder.replace(a[0].text, f'[{a[0].text}]({link_target})')
                 if not expected_links and ('❯' in actual_text or '❯' in actual_text):
                     self.result.add_error(self.context.path,
                                           f'H{self.context.level} header has id but no day links',
@@ -695,8 +697,8 @@ class MarkdownParser:
     @classmethod
     @lru_cache
     def markdown_to_html_document(cls, path: Path) -> HtmlElement:
-        content = cls.__markdown_to_html_parser().render(path.read_text(encoding='utf-8')).strip()
-        return document_fromstring(content)
+        content = cls.__markdown_to_html_parser().render(path.read_text(encoding='utf-8')).strip() or '<html></html>'
+        return document_fromstring(content.encode('utf-32'))
 
     @classmethod
     def markdown_to_html_fragment(cls, string: str) -> HtmlElement:

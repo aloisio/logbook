@@ -1,3 +1,5 @@
-lxml==4.7.1
+lxml==4.9.0
+markdown-it-py==2.1.0
 mdformat-gfm==0.3.5
-pytest==6.2.5
+mdformat==0.7.14
+pytest==7.1.2
