@@ -427,7 +427,7 @@ class Logbook(Parsable):
     def template(self) -> str:
         table = E.table({'class': 'year'})
         years = {y.year: y for y in self.years}
-        year_range = list(range(10 * (self.years[0].year // 10), self.years[-1].year + 1))
+        year_range = list(range(10 * (self.years[0].year // 10), self.years[-1].year + 1)) if years else []
         tr = E.tr()
         for y in year_range:
             if not y % 10:
