@@ -16,25 +16,37 @@ def chksum(path: Path) -> str:
     return blake2b.hexdigest()
 
 
-def main(write: bool, *patterns:str):
+def _rel(path: Path):
+    if path.is_relative_to(Path.cwd()):
+        return path.relative_to(Path.cwd())
+    return path
+
+
+def main(write: bool, *patterns: str):
+    def file_filter(path: Path) -> bool:
+        return path.is_absolute() and path.is_file() and path.exists()
+
     paths = list(map(Path, patterns))
-    files = set(filter(Path.exists, filter(Path.is_file, paths)))
-    glob_patterns = map(Path.as_posix, filterfalse(Path.exists, paths))
-    glob_files = (item for sublist in map(list, map(Path.cwd().glob, glob_patterns)) for item in sublist)
+    files = filter(file_filter, paths)
+    glob_patterns = map(Path.as_posix, filterfalse(Path.is_absolute, paths))
+    glob_files = (item for sublist in map(list, map(Path.cwd().glob, glob_patterns))
+                  for item in sublist if item.exists() and item.is_file())
     failures = []
     for path in sorted(set(files).union(set(glob_files))):
         checksum = chksum(path)
         match = CHKSUM_PATTERN.match(path.stem)
         original_checksum = match.group('checksum') if match else None
         if match and original_checksum == checksum:
-            print(f'Checksum OK {path}:')
+            print(f'Checksum OK: {_rel(path)}')
         if match and original_checksum != checksum:
-            print(f'Checksum FAIL: {path} checksum is {checksum}')
+            print(f'Checksum FAIL: {_rel(path)} checksum is {checksum}')
             failures.append(path)
+        if not match and not write:
+            print(f'Checksum missing: {_rel(path)}')
         if not match and write:
             new_path = path.parent / f'{path.stem}-{chksum(path)}{path.suffix}'
             path.rename(new_path)
-            print(f'Checksum added: {new_path}')
+            print(f'Checksum added: {_rel(new_path)}')
     return 0 if len(failures) == 0 else 1
 
 
