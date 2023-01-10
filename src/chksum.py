@@ -11,7 +11,7 @@ CHKSUM_PATTERN = re.compile(r'^.*-(?P<checksum>[0-9a-fA-F]{4})$')
 def chksum(path: Path) -> str:
     blake2b = hashlib.blake2b(digest_size=2)
     with path.open('rb') as input_file:
-        while buffer := input_file.read(2 ** 22):
+        while buffer := input_file.read(2 ** 20):
             blake2b.update(buffer)
     return blake2b.hexdigest()
 

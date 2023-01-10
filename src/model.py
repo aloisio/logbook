@@ -5,7 +5,12 @@ from calendar import month_name, HTMLCalendar
 from collections import defaultdict
 from dataclasses import dataclass, field, InitVar
 from functools import cached_property, partial, lru_cache
-from itertools import pairwise
+
+try:
+    from itertools import pairwise
+except ImportError:
+    from itertools_alt import pairwise
+
 from os import walk
 from os.path import relpath
 from pathlib import Path
@@ -707,7 +712,7 @@ class MarkdownParser:
 
     @classmethod
     def normalize_markdown(cls, content) -> str:
-        parser = cls.__markdown_to_markdown_parser()
+        parser = cls.markdown_to_markdown_parser()
         tokens = parser.parse(content)
         env = {'references': {}}
         links = list(cls.__get_links(tokens))
@@ -724,17 +729,17 @@ class MarkdownParser:
     @classmethod
     def iterlinks(cls, markdown_path: Path) -> Generator[Token, None, None]:
         markdown = markdown_path.read_text(encoding='utf-8')
-        return cls.__get_links(cls.__markdown_to_markdown_parser().parse(markdown))
+        return cls.__get_links(cls.markdown_to_markdown_parser().parse(markdown))
 
     @classmethod
     def invalidate_cache(cls):
         cls.__markdown_to_html_parser.cache_clear()
-        cls.__markdown_to_markdown_parser.cache_clear()
+        cls.markdown_to_markdown_parser.cache_clear()
         cls.markdown_to_html_document.cache_clear()
 
     @staticmethod
     @lru_cache
-    def __markdown_to_markdown_parser():
+    def markdown_to_markdown_parser():
         parser = build_mdit(renderer_cls=MDRenderer, mdformat_opts={'number': True})
         update_mdit(parser)
         parser.options['linkify'] = False

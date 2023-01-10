@@ -7,10 +7,10 @@ from model import Logbook
 
 
 def main(args: argparse.Namespace):
-    validate(Logbook(args.directory))
+    exit(validate(Logbook(args.directory)))
 
 
-def validate(logbook: Logbook):
+def validate(logbook: Logbook) -> int:
     parse_result = logbook.parse()
     errors = defaultdict(list)
     # noinspection PyTypeChecker
@@ -23,8 +23,8 @@ def validate(logbook: Logbook):
             if e.hint:
                 print(e.hint)
     if not parse_result.valid:
-        sys.exit(1)
-
+        return(1)
+    return(0)
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
