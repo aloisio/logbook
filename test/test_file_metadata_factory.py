@@ -24,7 +24,7 @@ def test_file_metadata_creation(sample_file, file_factory):
     """Test the creation of FileMetadata object using the factory"""
     metadata = file_factory.create_file_metadata(sample_file)
     assert metadata.path == sample_file
-    assert metadata.file_size == 11
+    assert metadata.size == 11
 
 
 def test_create_file_metadata():

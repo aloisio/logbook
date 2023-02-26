@@ -6,6 +6,7 @@ from hashlib import blake2b
 from itertools import filterfalse
 from os import stat
 from pathlib import Path
+from typing import Optional, Tuple
 
 from adapters import DefaultImageAdapter, ImageAdapter
 
@@ -51,20 +52,13 @@ class FileMetadata:
     def __init__(self, _path, _image_adapter: ImageAdapter):
         self._image_adapter = _image_adapter
         self.path = _path
-        self._checksum = self._image_entropy = self._image_histogram = self._image_size = None
         self._is_image = False
 
     @property
-    def file_size(self) -> int:
+    def size(self) -> int:
         if not hasattr(self, '_byte_size'):
             self._byte_size = stat(self.path).st_size
         return self._byte_size
-
-    @property
-    def image_size(self) -> int:
-        if not hasattr(self, '_image_size'):
-            self._compute_checksum()
-        return self._image_size
 
     @property
     def checksum(self) -> str:
@@ -83,48 +77,28 @@ class FileMetadata:
         return self._is_image
 
     @property
-    def byte_entropy(self) -> float:
+    def entropy(self) -> float:
         if not hasattr(self, '_byte_entropy'):
             self._compute_checksum()
         return self._byte_entropy
 
     @property
-    def image_entropy(self) -> float:
-        if not hasattr(self, '_byte_entropy'):
-            self._compute_checksum()
-        return self._image_entropy
-
-    @property
-    def byte_histogram(self) -> list[int]:
+    def histogram(self) -> list[int]:
         if not hasattr(self, '_byte_histogram'):
             self._compute_checksum()
         return self._byte_histogram
 
     @property
-    def byte_fractal_dimension(self) -> list[float]:
+    def fractal_dimension(self) -> list[float]:
         if not hasattr(self, '_byte_thumbnail'):
             self._compute_checksum()
         return self._image_adapter.fractal_dimension(self._byte_thumbnail)
-
-    @property
-    def image_histogram(self) -> list[int]:
-        if not hasattr(self, '_image_histogram'):
-            self._compute_checksum()
-        return self._image_histogram
-
-    @cached_property
-    def image_fractal_dimension(self) -> list[float]:
-        if not hasattr(self, '_image_thumbnail'):
-            self._compute_checksum()
-        return self._image_adapter.fractal_dimension(self._image_thumbnail)
 
     def _compute_checksum(self):
         """
         Initializes fields: _byte_histogram, _byte_thumbnail, _checksum, _histogram_entropy,
         _image_entropy, _image_histogram, _image_size, _image_thumbnail, _is_image_
         """
-        if self._checksum is not None:
-            return
         digest = blake2b(digest_size=8)
         histogram_image = self._image_adapter.histogram(self.path, digest)
         self._byte_entropy = self._image_adapter.last_entropy
@@ -143,8 +117,38 @@ class FileMetadata:
         self._checksum = digest.hexdigest()
 
 
+# noinspection PyAttributeOutsideInit
 class ImageFileMetadata(FileMetadata):
-    pass
+    def __init__(self, _path, _image_adapter: ImageAdapter):
+        super().__init__(_path, _image_adapter)
+
+    @cached_property
+    def fractal_dimension(self) -> list[float]:
+        if not hasattr(self, '_image_thumbnail'):
+            self._compute_checksum()
+        return self._image_adapter.fractal_dimension(self._image_thumbnail)
+
+    @property
+    def size(self) -> Optional[Tuple[int, int]]:
+        if not hasattr(self, '_image_size'):
+            self._compute_checksum()
+        return self._image_size
+
+    @property
+    def is_image(self) -> bool:
+        return True
+
+    @property
+    def entropy(self) -> float:
+        if not hasattr(self, '_byte_entropy'):
+            self._compute_checksum()
+        return self._image_entropy
+
+    @property
+    def histogram(self) -> list[int]:
+        if not hasattr(self, '_image_histogram'):
+            self._compute_checksum()
+        return self._image_histogram
 
 
 if __name__ == '__main__':
