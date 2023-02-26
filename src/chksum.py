@@ -29,7 +29,7 @@ def main(write: bool, *patterns: str):
                   for item in sublist if item.exists() and item.is_file())
     failures = []
     for path in sorted(set(files).union(set(glob_files))):
-        checksum = FileMetadataFactory().create(path).checksum
+        checksum = FileMetadataFactory().create_file_metadata(path).checksum
         match = CHKSUM_PATTERN.match(path.stem)
         original_checksum = match.group('checksum') if match else None
         if match and original_checksum == checksum:
@@ -143,6 +143,10 @@ class FileMetadata:
         self._checksum = digest.hexdigest()
 
 
+class ImageFileMetadata(FileMetadata):
+    pass
+
+
 if __name__ == '__main__':
     parser = ArgumentParser()
     parser.add_argument('-w', '--write', action='store_true', help='append checksum to file name')
@@ -152,11 +156,11 @@ if __name__ == '__main__':
 
 
 class FileMetadataFactory:
-    def __init__(self, image_adapter = None):
+    def __init__(self, image_adapter=None):
         self.image_adapter = DefaultImageAdapter() if image_adapter is None else image_adapter
 
     def create_file_metadata(self, path: Path) -> FileMetadata:
         return FileMetadata(path, self.image_adapter)
 
-    # def create_image_file_metadata(self, path: Path) -> FileMetadata:
-    #     return ImageFileMetadata(path, self.image_adapter)
+    def create_image_file_metadata(self, path: Path) -> FileMetadata:
+        return ImageFileMetadata(path, self.image_adapter)
