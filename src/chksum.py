@@ -2,18 +2,23 @@ import hashlib
 import re
 import sys
 from argparse import ArgumentParser
+from functools import cached_property
+from hashlib import blake2b
 from itertools import filterfalse
+from os import stat
 from pathlib import Path
 
-CHKSUM_PATTERN = re.compile(r'^.*-(?P<checksum>[0-9a-fA-F]{4})$')
+from adapters import DefaultImageAdapter, ImageAdapter
+
+CHKSUM_PATTERN = re.compile(r'^.*\.(?P<checksum>[0-9a-fA-F]{16})$')
 
 
 def chksum(path: Path) -> str:
-    blake2b = hashlib.blake2b(digest_size=2)
+    digest = hashlib.blake2b(digest_size=2)
     with path.open('rb') as input_file:
         while buffer := input_file.read(2 ** 20):
-            blake2b.update(buffer)
-    return blake2b.hexdigest()
+            digest.update(buffer)
+    return digest.hexdigest()
 
 
 def _rel(path: Path):
@@ -23,8 +28,8 @@ def _rel(path: Path):
 
 
 def main(write: bool, *patterns: str):
-    def file_filter(path: Path) -> bool:
-        return path.is_absolute() and path.is_file() and path.exists()
+    def file_filter(_path: Path) -> bool:
+        return _path.is_absolute() and _path.is_file() and _path.exists()
 
     paths = list(map(Path, patterns))
     files = filter(file_filter, paths)
@@ -48,6 +53,103 @@ def main(write: bool, *patterns: str):
             path.rename(new_path)
             print(f'Checksum added: {_rel(new_path)}')
     return 0 if len(failures) == 0 else 1
+
+
+# noinspection PyAttributeOutsideInit
+class FileMetadata:
+    def __init__(self, _path, _image_adapter: ImageAdapter = DefaultImageAdapter()):
+        self._image_adapter = _image_adapter
+        self.path = _path
+        self._checksum = self._image_entropy = self._image_histogram = self._image_size = None
+        self._is_image = False
+
+    @property
+    def file_size(self) -> int:
+        if not hasattr(self, '_byte_size'):
+            self._byte_size = stat(self.path).st_size
+        return self._byte_size
+
+    @property
+    def image_size(self) -> int:
+        if not hasattr(self, '_image_size'):
+            self._compute_checksum()
+        return self._image_size
+
+    @property
+    def checksum(self) -> str:
+        if not hasattr(self, '_checksum'):
+            self._compute_checksum()
+        return self._checksum
+
+    @cached_property
+    def path_with_checksum(self):
+        return self.path.with_name(f'{self.path.stem}.{self.checksum}{self.path.suffix}')
+
+    @property
+    def is_image(self) -> bool:
+        if not hasattr(self, '_is_image'):
+            self._compute_checksum()
+        return self._is_image
+
+    @property
+    def byte_entropy(self) -> float:
+        if not hasattr(self, '_byte_entropy'):
+            self._compute_checksum()
+        return self._byte_entropy
+
+    @property
+    def image_entropy(self) -> float:
+        if not hasattr(self, '_byte_entropy'):
+            self._compute_checksum()
+        return self._image_entropy
+
+    @property
+    def byte_histogram(self) -> list[int]:
+        if not hasattr(self, '_byte_histogram'):
+            self._compute_checksum()
+        return self._byte_histogram
+
+    @property
+    def byte_fractal_dimension(self) -> list[float]:
+        if not hasattr(self, '_byte_thumbnail'):
+            self._compute_checksum()
+        return self._image_adapter.fractal_dimension(self._byte_thumbnail)
+
+    @property
+    def image_histogram(self) -> list[int]:
+        if not hasattr(self, '_image_histogram'):
+            self._compute_checksum()
+        return self._image_histogram
+
+    @cached_property
+    def image_fractal_dimension(self) -> list[float]:
+        if not hasattr(self, '_image_thumbnail'):
+            self._compute_checksum()
+        return self._image_adapter.fractal_dimension(self._image_thumbnail)
+
+    def _compute_checksum(self):
+        """
+        Initializes fields: _byte_histogram, _byte_thumbnail, _checksum, _histogram_entropy,
+        _image_entropy, _image_histogram, _image_size, _image_thumbnail, _is_image_
+        """
+        if self._checksum is not None:
+            return
+        digest = blake2b(digest_size=8)
+        histogram_image = self._image_adapter.histogram(self.path, digest)
+        self._byte_entropy = self._image_adapter.last_entropy
+        self._byte_histogram = self._image_adapter.rgb_histogram(histogram_image)
+        self._byte_thumbnail = self._image_adapter.to_grayscale(histogram_image)
+        # noinspection PyBroadException
+        try:
+            thumbnail_image = self._image_adapter.thumbnail(self.path, digest)
+            self._image_size = self._image_adapter.last_size
+            self._image_entropy = self._image_adapter.last_entropy
+            self._image_histogram = self._image_adapter.rgb_histogram(thumbnail_image)
+            self._image_thumbnail = self._image_adapter.to_grayscale(thumbnail_image)
+            self._is_image = True
+        except Exception:
+            self._is_image = False
+        self._checksum = digest.hexdigest()
 
 
 if __name__ == '__main__':
