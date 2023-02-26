@@ -158,3 +158,8 @@ if __name__ == '__main__':
     parser.add_argument('patterns', metavar='FILE', type=str, nargs='+', help='glob pattern for file(s) to check')
     options = parser.parse_args()
     sys.exit(main(options.write, *options.patterns))
+
+
+class FileMetadataFactory:
+    def create(self, path: Path) -> FileMetadata:
+        return FileMetadata(path)
