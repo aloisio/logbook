@@ -1,4 +1,3 @@
-import hashlib
 import re
 import sys
 from argparse import ArgumentParser
@@ -11,14 +10,6 @@ from pathlib import Path
 from adapters import DefaultImageAdapter, ImageAdapter
 
 CHKSUM_PATTERN = re.compile(r'^.*\.(?P<checksum>[0-9a-fA-F]{16})$')
-
-
-def chksum(path: Path) -> str:
-    digest = hashlib.blake2b(digest_size=2)
-    with path.open('rb') as input_file:
-        while buffer := input_file.read(2 ** 20):
-            digest.update(buffer)
-    return digest.hexdigest()
 
 
 def _rel(path: Path):
@@ -38,7 +29,7 @@ def main(write: bool, *patterns: str):
                   for item in sublist if item.exists() and item.is_file())
     failures = []
     for path in sorted(set(files).union(set(glob_files))):
-        checksum = chksum(path)
+        checksum = FileMetadataFactory().create(path).checksum
         match = CHKSUM_PATTERN.match(path.stem)
         original_checksum = match.group('checksum') if match else None
         if match and original_checksum == checksum:
@@ -49,7 +40,7 @@ def main(write: bool, *patterns: str):
         if not match and not write:
             print(f'Checksum missing: {_rel(path)}')
         if not match and write:
-            new_path = path.parent / f'{path.stem}-{chksum(path)}{path.suffix}'
+            new_path = path.parent / f'{path.stem}-{checksum}{path.suffix}'
             path.rename(new_path)
             print(f'Checksum added: {_rel(new_path)}')
     return 0 if len(failures) == 0 else 1
@@ -57,7 +48,7 @@ def main(write: bool, *patterns: str):
 
 # noinspection PyAttributeOutsideInit
 class FileMetadata:
-    def __init__(self, _path, _image_adapter: ImageAdapter = DefaultImageAdapter()):
+    def __init__(self, _path, _image_adapter: ImageAdapter):
         self._image_adapter = _image_adapter
         self.path = _path
         self._checksum = self._image_entropy = self._image_histogram = self._image_size = None
@@ -161,5 +152,11 @@ if __name__ == '__main__':
 
 
 class FileMetadataFactory:
-    def create(self, path: Path) -> FileMetadata:
-        return FileMetadata(path)
+    def __init__(self, image_adapter = None):
+        self.image_adapter = DefaultImageAdapter() if image_adapter is None else image_adapter
+
+    def create_file_metadata(self, path: Path) -> FileMetadata:
+        return FileMetadata(path, self.image_adapter)
+
+    # def create_image_file_metadata(self, path: Path) -> FileMetadata:
+    #     return ImageFileMetadata(path, self.image_adapter)

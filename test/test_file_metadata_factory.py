@@ -1,5 +1,9 @@
+from pathlib import Path
+from unittest.mock import MagicMock, patch
+
 import pytest
-from chksum import FileMetadataFactory
+
+from chksum import FileMetadataFactory, FileMetadata
 
 
 @pytest.fixture
@@ -18,6 +22,18 @@ def file_factory():
 
 def test_file_metadata_creation(sample_file, file_factory):
     """Test the creation of FileMetadata object using the factory"""
-    metadata = file_factory.create(sample_file)
+    metadata = file_factory.create_file_metadata(sample_file)
     assert metadata.path == sample_file
     assert metadata.file_size == 11
+
+
+def test_create_file_metadata():
+    mock_image_adapter = MagicMock()
+    file_path = Path('/path/to/file.txt')
+
+    with patch('src.chksum.ImageAdapter', return_value=mock_image_adapter):
+        file_metadata = FileMetadataFactory(mock_image_adapter).create_file_metadata(file_path)
+
+    assert isinstance(file_metadata, FileMetadata)
+    assert file_metadata.path == file_path
+    assert file_metadata._image_adapter == mock_image_adapter
