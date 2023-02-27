@@ -231,8 +231,7 @@ class FileMetadataFactory:
         self.image_adapter = DefaultImageAdapter() if image_adapter is None else image_adapter
 
     def create_file_metadata(self, path: Path) -> FileMetadata:
-        metadata = FileMetadata(path, self.image_adapter)
-        return metadata
+        return FileMetadata(path, self.image_adapter)
 
     def create_image_file_metadata(self, file_metadata: FileMetadata) -> ImageFileMetadata:
         if file_metadata.is_image:

@@ -3,6 +3,7 @@ import re
 import shutil
 from functools import partial
 from pathlib import Path
+from sys import platform
 from textwrap import dedent
 from typing import Callable
 from unittest import skip
@@ -656,7 +657,7 @@ class TestFooter:
         assert '=style.css' in footer.template
 
 
-@skip
+@pytest.mark.skipif(platform.lower() != "darwin", reason="Test only runs on macOS")
 def test_lxml_471_emoji_bug():
     def assert_emoji_parsing(transform):
         # Woman Facepalming Emoji
