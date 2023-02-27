@@ -8,7 +8,7 @@ from os import stat
 from pathlib import Path
 from typing import Optional, Tuple, Protocol, Union
 
-from adapters import DefaultImageAdapter, ImageAdapter
+from adapters import DefaultImageAdapter, ImageAdapter, Image
 
 CHKSUM_PATTERN = re.compile(r'^.*\.(?P<checksum>[0-9a-fA-F]{16})$')
 
@@ -47,7 +47,7 @@ def main(write: bool, *patterns: str):
     return 0 if len(failures) == 0 else 1
 
 
-# noinspection PyAttributeOutsideInit,PyPropertyDefinition
+# noinspection PyPropertyDefinition
 class Metadata(Protocol):
     @property
     def path(self) -> Path:
@@ -87,7 +87,6 @@ class FileMetadata(Metadata):
     def __init__(self, _path, _image_adapter: ImageAdapter):
         self._image_adapter = _image_adapter
         self._path = _path
-        self._is_image = False
 
     @property
     def path(self) -> Path:
@@ -133,6 +132,30 @@ class FileMetadata(Metadata):
             self._compute_checksum()
         return self._is_image
 
+    @property
+    def image_histogram(self) -> list[int]:
+        if not hasattr(self, '_image_histogram'):
+            self._compute_checksum()
+        return self._image_histogram
+
+    @property
+    def image_entropy(self) -> float:
+        if not hasattr(self, '_image_entropy'):
+            self._compute_checksum()
+        return self._image_entropy
+
+    @property
+    def image_size(self) -> Tuple[int, int]:
+        if not hasattr(self, '_image_size'):
+            self._compute_checksum()
+        return self._image_size
+
+    @property
+    def image_thumbnail(self) -> Image:
+        if not hasattr(self, '_image_thumbnail'):
+            self._compute_checksum()
+        return self._image_thumbnail
+
     def _compute_checksum(self):
         """
         Initializes fields: _byte_histogram, _byte_thumbnail, _checksum, _histogram_entropy,
@@ -157,11 +180,9 @@ class FileMetadata(Metadata):
         self._checksum = digest.hexdigest()
 
 
-# noinspection PyProtectedMember
 class ImageFileMetadata(Metadata):
     def __init__(self, file_metadata: FileMetadata, image_adapter: ImageAdapter):
         self._file_metadata = file_metadata
-        self._checksum = file_metadata.checksum
         self._image_adapter = image_adapter
 
     @property
@@ -174,15 +195,15 @@ class ImageFileMetadata(Metadata):
 
     @property
     def checksum(self) -> str:
-        return self._checksum
+        return self._file_metadata.checksum
 
     @property
     def fractal_dimension(self) -> list[float]:
-        return self._image_adapter.fractal_dimension(self._file_metadata._image_thumbnail)
+        return self._image_adapter.fractal_dimension(self._file_metadata.image_thumbnail)
 
     @property
     def size(self) -> Optional[Tuple[int, int]]:
-        return self._file_metadata._image_size
+        return self._file_metadata.image_size
 
     @property
     def is_image(self) -> bool:
@@ -190,11 +211,11 @@ class ImageFileMetadata(Metadata):
 
     @property
     def entropy(self) -> float:
-        return self._file_metadata._image_entropy
+        return self._file_metadata.image_entropy
 
     @property
     def histogram(self) -> list[int]:
-        return self._file_metadata._image_histogram
+        return self._file_metadata.image_histogram
 
 
 if __name__ == '__main__':
@@ -209,10 +230,8 @@ class FileMetadataFactory:
     def __init__(self, image_adapter=None):
         self.image_adapter = DefaultImageAdapter() if image_adapter is None else image_adapter
 
-    def create_file_metadata(self, path: Path, lazy: bool = False) -> FileMetadata:
+    def create_file_metadata(self, path: Path) -> FileMetadata:
         metadata = FileMetadata(path, self.image_adapter)
-        if not lazy:
-            _ = metadata.checksum
         return metadata
 
     def create_image_file_metadata(self, file_metadata: FileMetadata) -> ImageFileMetadata:
