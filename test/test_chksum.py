@@ -40,25 +40,20 @@ def test_checksum_of_text_file_as_image_file(tmp_path):
 
 
 def test_checksum_of_greyscale_image_file():
-    image_file = Path('sierpinski.jpg')
+    image_file = Path(__file__).parent / 'sierpinski.jpg'
     factory = FileMetadataFactory()
     metadata = factory.create_image_file_metadata(factory.create_file_metadata(image_file))
-    # assert metadata.size == 127620
-    # assert stdev(metadata.histogram) == approx(1851.915599)
-    # assert quantiles(metadata.fractal_dimension) == list(map(approx, [0.4932759, 0.50088119, 0.7010070]))
     assert metadata.is_image
     assert metadata.size == (1018, 821)
-    # assert quantiles(metadata.histogram) == [0, 0, 0]
     assert quantiles(metadata.histogram) == [27.0, 40.5, 73.0]
     assert quantiles(metadata.fractal_dimension) == [approx(1.5880126), approx(1.643898), approx(1.660302)]
-    # assert metadata.entropy == approx(4.1861197)
     assert metadata.entropy == approx(3.0831189)
     assert metadata.checksum == '8b75f4bc101858f0'
     assert metadata.path_with_checksum == image_file.parent / 'sierpinski.8b75f4bc101858f0.jpg'
 
 
 def test_checksum_of_greyscale_image_file_as_file():
-    image_file = Path('sierpinski.jpg')
+    image_file = Path(__file__).parent / 'sierpinski.jpg'
     metadata = FileMetadataFactory().create_file_metadata(image_file)
     assert metadata.size == 127620
     assert stdev(metadata.histogram) == approx(1851.915599)
@@ -71,7 +66,7 @@ def test_checksum_of_greyscale_image_file_as_file():
 
 
 def test_checksum_of_colour_image_file():
-    image_file = Path('brazil.png')
+    image_file = Path(__file__).parent / 'brazil.png'
     metadata = FileMetadataFactory().create_image_file_metadata(FileMetadataFactory().create_file_metadata(image_file))
     assert metadata.is_image
     assert metadata.size == (1187, 845)
@@ -83,7 +78,7 @@ def test_checksum_of_colour_image_file():
 
 
 def test_checksum_of_colour_image_file_as_file():
-    image_file = Path('brazil.png')
+    image_file = Path(__file__).parent / 'brazil.png'
     metadata = FileMetadataFactory().create_file_metadata(image_file)
     assert metadata.size == 19845
     assert stdev(metadata.histogram) == approx(3309.278007)

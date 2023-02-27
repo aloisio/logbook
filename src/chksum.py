@@ -6,7 +6,7 @@ from hashlib import blake2b
 from itertools import filterfalse
 from os import stat
 from pathlib import Path
-from typing import Optional, Tuple, Protocol
+from typing import Optional, Tuple, Protocol, Union
 
 from adapters import DefaultImageAdapter, ImageAdapter
 
@@ -62,11 +62,11 @@ class Metadata(Protocol):
         ...
 
     @property
-    def size(self) -> int:
+    def size(self) -> Union[int, Tuple[int, int]]:
         ...
 
     @cached_property
-    def path_with_checksum(self):
+    def path_with_checksum(self) -> Path:
         ...
 
     @property
@@ -111,7 +111,7 @@ class FileMetadata(Metadata):
         return self._byte_size
 
     @cached_property
-    def path_with_checksum(self):
+    def path_with_checksum(self) -> Path:
         return self.path.with_name(f'{self.path.stem}.{self.checksum}{self.path.suffix}')
 
     @property
@@ -179,7 +179,9 @@ class ImageFileMetadata(Metadata):
 
     @property
     def is_image(self) -> bool:
-        return self._file_metadata.is_image
+        if not hasattr(self._file_metadata, '_is_image'):
+            self._file_metadata._compute_checksum()
+        return self._file_metadata._is_image
 
     @property
     def entropy(self) -> float:
@@ -209,7 +211,8 @@ class FileMetadataFactory:
     def create_file_metadata(self, path: Path) -> FileMetadata:
         return FileMetadata(path, self.image_adapter)
 
-    def create_image_file_metadata(self, file_metadata: FileMetadata) -> FileMetadata:
+    def create_image_file_metadata(self, file_metadata: FileMetadata) -> ImageFileMetadata:
         if file_metadata.is_image:
-            return ImageFileMetadata(file_metadata)
-        raise ValueError(file_metadata.path)
+            return ImageFileMetadata(file_metadata, self.image_adapter)
+        else:
+            raise ValueError(file_metadata.path)
