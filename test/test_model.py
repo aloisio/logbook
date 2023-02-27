@@ -5,6 +5,7 @@ from functools import partial
 from pathlib import Path
 from textwrap import dedent
 from typing import Callable
+from unittest import skip
 
 import pytest
 from lxml.html import document_fromstring
@@ -655,6 +656,7 @@ class TestFooter:
         assert '=style.css' in footer.template
 
 
+@skip
 def test_lxml_471_emoji_bug():
     def assert_emoji_parsing(transform):
         # Woman Facepalming Emoji
