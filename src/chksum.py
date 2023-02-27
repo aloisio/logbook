@@ -47,7 +47,7 @@ def main(write: bool, *patterns: str):
     return 0 if len(failures) == 0 else 1
 
 
-# noinspection PyAttributeOutsideInit
+# noinspection PyAttributeOutsideInit,PyPropertyDefinition
 class Metadata(Protocol):
     @property
     def path(self) -> Path:
@@ -65,7 +65,7 @@ class Metadata(Protocol):
     def size(self) -> Union[int, Tuple[int, int]]:
         ...
 
-    @cached_property
+    @property
     def path_with_checksum(self) -> Path:
         ...
 
@@ -82,6 +82,7 @@ class Metadata(Protocol):
         ...
 
 
+# noinspection PyAttributeOutsideInit
 class FileMetadata(Metadata):
     def __init__(self, _path, _image_adapter: ImageAdapter):
         self._image_adapter = _image_adapter
@@ -150,49 +151,49 @@ class FileMetadata(Metadata):
             self._image_histogram = self._image_adapter.rgb_histogram(thumbnail_image)
             self._image_thumbnail = self._image_adapter.to_grayscale(thumbnail_image)
             self._is_image = True
-        except Exception:
+        except Exception as exc:
+            print(exc)
             self._is_image = False
         self._checksum = digest.hexdigest()
 
 
-# noinspection PyAttributeOutsideInit
+# noinspection PyProtectedMember
 class ImageFileMetadata(Metadata):
     def __init__(self, file_metadata: FileMetadata, image_adapter: ImageAdapter):
         self._file_metadata = file_metadata
+        self._checksum = file_metadata.checksum
         self._image_adapter = image_adapter
 
     @property
     def path(self) -> Path:
         return self._file_metadata.path
 
-    @cached_property
+    @property
+    def path_with_checksum(self) -> Path:
+        return self._file_metadata.path_with_checksum
+
+    @property
+    def checksum(self) -> str:
+        return self._checksum
+
+    @property
     def fractal_dimension(self) -> list[float]:
-        if not hasattr(self._file_metadata, '_image_thumbnail'):
-            self._file_metadata._compute_checksum()
         return self._image_adapter.fractal_dimension(self._file_metadata._image_thumbnail)
 
     @property
     def size(self) -> Optional[Tuple[int, int]]:
-        if not hasattr(self._file_metadata, '_image_size'):
-            self._file_metadata._compute_checksum()
         return self._file_metadata._image_size
 
     @property
     def is_image(self) -> bool:
-        if not hasattr(self._file_metadata, '_is_image'):
-            self._file_metadata._compute_checksum()
-        return self._file_metadata._is_image
+        return self._file_metadata.is_image
 
     @property
     def entropy(self) -> float:
-        if not hasattr(self._file_metadata, '_image_entropy'):
-            self._file_metadata._compute_checksum()
         return self._file_metadata._image_entropy
 
     @property
     def histogram(self) -> list[int]:
-        if not hasattr(self._file_metadata, '_image_histogram'):
-            self._file_metadata._compute_checksum()
         return self._file_metadata._image_histogram
 
 
@@ -208,8 +209,11 @@ class FileMetadataFactory:
     def __init__(self, image_adapter=None):
         self.image_adapter = DefaultImageAdapter() if image_adapter is None else image_adapter
 
-    def create_file_metadata(self, path: Path) -> FileMetadata:
-        return FileMetadata(path, self.image_adapter)
+    def create_file_metadata(self, path: Path, lazy: bool = False) -> FileMetadata:
+        metadata = FileMetadata(path, self.image_adapter)
+        if not lazy:
+            _ = metadata.checksum
+        return metadata
 
     def create_image_file_metadata(self, file_metadata: FileMetadata) -> ImageFileMetadata:
         if file_metadata.is_image:

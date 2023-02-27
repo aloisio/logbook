@@ -67,7 +67,8 @@ def test_checksum_of_greyscale_image_file_as_file():
 
 def test_checksum_of_colour_image_file():
     image_file = Path(__file__).parent / 'brazil.png'
-    metadata = FileMetadataFactory().create_image_file_metadata(FileMetadataFactory().create_file_metadata(image_file))
+    factory = FileMetadataFactory()
+    metadata = factory.create_image_file_metadata(factory.create_file_metadata(image_file))
     assert metadata.is_image
     assert metadata.size == (1187, 845)
     assert quantiles(metadata.histogram) == [5.0, 8.0, 15.0]
