@@ -7,7 +7,7 @@ on:
 jobs:
   build:
     env:
-      PYTHONPATH: ${{github.workspace}}/src;${{github.workspace}}/test
+      PYTHONPATH: ${{github.workspace}}/src:${{github.workspace}}/test
     runs-on: ubuntu-latest
     defaults:
       run:
