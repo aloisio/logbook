@@ -7,11 +7,11 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    env:
+      node-version: '16'
     defaults:
       run:
         shell: bash
-      env:
-        node-version: '16'
 
     steps:
     - uses: actions/checkout@v2
