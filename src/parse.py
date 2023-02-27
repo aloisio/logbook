@@ -1,5 +1,4 @@
 import argparse
-import sys
 from collections import defaultdict
 from pathlib import Path
 
@@ -23,8 +22,9 @@ def validate(logbook: Logbook) -> int:
             if e.hint:
                 print(e.hint)
     if not parse_result.valid:
-        return(1)
-    return(0)
+        return 1
+    return 0
+
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()

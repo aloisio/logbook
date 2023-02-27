@@ -4,7 +4,6 @@ from argparse import ArgumentParser
 from functools import cached_property
 from hashlib import blake2b
 from itertools import filterfalse
-from os import stat
 from pathlib import Path
 from typing import Optional, Tuple, Protocol, Union
 
@@ -84,9 +83,9 @@ class Metadata(Protocol):
 
 # noinspection PyAttributeOutsideInit
 class FileMetadata(Metadata):
-    def __init__(self, _path, _image_adapter: ImageAdapter):
-        self._image_adapter = _image_adapter
-        self._path = _path
+    def __init__(self, path, image_adapter: ImageAdapter):
+        self._image_adapter = image_adapter
+        self._path = path
 
     @property
     def path(self) -> Path:
@@ -95,19 +94,19 @@ class FileMetadata(Metadata):
     @property
     def histogram(self) -> list[int]:
         if not hasattr(self, '_byte_histogram'):
-            self._compute_checksum()
+            self._compute_metadata()
         return self._byte_histogram
 
     @property
     def entropy(self) -> float:
         if not hasattr(self, '_byte_entropy'):
-            self._compute_checksum()
+            self._compute_metadata()
         return self._byte_entropy
 
     @property
     def size(self) -> int:
         if not hasattr(self, '_byte_size'):
-            self._byte_size = stat(self.path).st_size
+            self._byte_size = self.path.stat().st_size
         return self._byte_size
 
     @cached_property
@@ -117,46 +116,46 @@ class FileMetadata(Metadata):
     @property
     def checksum(self) -> str:
         if not hasattr(self, '_checksum'):
-            self._compute_checksum()
+            self._compute_metadata()
         return self._checksum
 
     @property
     def fractal_dimension(self) -> list[float]:
         if not hasattr(self, '_byte_thumbnail'):
-            self._compute_checksum()
+            self._compute_metadata()
         return self._image_adapter.fractal_dimension(self._byte_thumbnail)
 
     @property
     def is_image(self) -> bool:
         if not hasattr(self, '_is_image'):
-            self._compute_checksum()
+            self._compute_metadata()
         return self._is_image
 
     @property
     def image_histogram(self) -> list[int]:
         if not hasattr(self, '_image_histogram'):
-            self._compute_checksum()
+            self._compute_metadata()
         return self._image_histogram
 
     @property
     def image_entropy(self) -> float:
         if not hasattr(self, '_image_entropy'):
-            self._compute_checksum()
+            self._compute_metadata()
         return self._image_entropy
 
     @property
     def image_size(self) -> Tuple[int, int]:
         if not hasattr(self, '_image_size'):
-            self._compute_checksum()
+            self._compute_metadata()
         return self._image_size
 
     @property
     def image_thumbnail(self) -> Image:
         if not hasattr(self, '_image_thumbnail'):
-            self._compute_checksum()
+            self._compute_metadata()
         return self._image_thumbnail
 
-    def _compute_checksum(self):
+    def _compute_metadata(self):
         """
         Initializes fields: _byte_histogram, _byte_thumbnail, _checksum, _histogram_entropy,
         _image_entropy, _image_histogram, _image_size, _image_thumbnail, _is_image_
@@ -174,8 +173,7 @@ class FileMetadata(Metadata):
             self._image_histogram = self._image_adapter.rgb_histogram(thumbnail_image)
             self._image_thumbnail = self._image_adapter.to_grayscale(thumbnail_image)
             self._is_image = True
-        except Exception as exc:
-            print(exc)
+        except Exception:
             self._is_image = False
         self._checksum = digest.hexdigest()
 
@@ -233,7 +231,7 @@ class FileMetadataFactory:
     def create_file_metadata(self, path: Path) -> FileMetadata:
         return FileMetadata(path, self.image_adapter)
 
-    def create_image_file_metadata(self, file_metadata: FileMetadata) -> ImageFileMetadata:
+    def create_image_file_metadata(self, file_metadata: FileMetadata) -> Metadata:
         if file_metadata.is_image:
             return ImageFileMetadata(file_metadata, self.image_adapter)
         else:

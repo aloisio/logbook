@@ -6,7 +6,6 @@ from pathlib import Path
 from sys import platform
 from textwrap import dedent
 from typing import Callable
-from unittest import skip
 
 import pytest
 from lxml.html import document_fromstring
@@ -404,11 +403,11 @@ class TestLogbook:
 
     def test_parse_invalid_day_invalid_header_order(self, tmp_path_factory):
         def invalid_header_order(order: list[int], _):
-            return '\n'.join(f'{"#" * i} Header {i}' for i in order)
+            return '\n'.join(f'{"#" * n} Header {n}' for n in order)
 
-        invalid_Headers = [[2, 1], [1, 3], [1, 4], [1, 2, 4], [1, 2, 5], [1, 2, 3, 5], [1, 2, 3, 2, 4],
+        invalid_headers = [[2, 1], [1, 3], [1, 4], [1, 2, 4], [1, 2, 5], [1, 2, 3, 5], [1, 2, 3, 2, 4],
                            [1, 2, 3, 2, 3, 4, 2, 4], [1, 2, 2, 3, 5, 2, 3], [1, 2, 3, 4, 2, 3, 4, 6, 2]]
-        for i, headers in enumerate(invalid_Headers):
+        for i, headers in enumerate(invalid_headers):
             logbook = create_logbook_from_files(tmp_path_factory.mktemp(f'{i}'), partial(invalid_header_order, headers))
             errors = logbook.parse().errors
             path = logbook.years[0].days[0].path

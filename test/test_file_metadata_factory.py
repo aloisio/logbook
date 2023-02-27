@@ -4,7 +4,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from chksum import FileMetadataFactory, FileMetadata, ImageFileMetadata, Metadata
+from chksum import FileMetadataFactory, FileMetadata, ImageFileMetadata
 
 
 @pytest.fixture
@@ -47,6 +47,7 @@ def test_image_file_metadata():
 
     assert file_metadata.path == path
     assert file_metadata._image_adapter == image_adapter
+
 
 def test_image_file_metadata_fails_with_non_image_path():
     factory = FileMetadataFactory()
