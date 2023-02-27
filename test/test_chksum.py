@@ -12,6 +12,7 @@ def test_checksum_of_empty_file(tmp_path):
     metadata = FileMetadataFactory().create_file_metadata(empty_file)
     assert metadata.size == 0
     assert not metadata.is_image
+    assert isinstance(metadata, FileMetadata)
     assert metadata.histogram == ([256 * 256] + 255 * [0]) * 3
     assert metadata.fractal_dimension == [approx(0)] * 256
     assert metadata.entropy == approx(1.584962)

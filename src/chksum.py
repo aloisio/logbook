@@ -174,6 +174,10 @@ class FileMetadata(Metadata):
             self._image_thumbnail = self._image_adapter.to_grayscale(thumbnail_image)
             self._is_image = True
         except Exception:
+            self._image_size = None
+            self._image_entropy = None
+            self._image_histogram = None
+            self._image_thumbnail = None
             self._is_image = False
         self._checksum = digest.hexdigest()
 
