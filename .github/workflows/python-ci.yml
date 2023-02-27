@@ -8,11 +8,8 @@ jobs:
   build:
     runs-on: ubuntu-latest
     defaults:
-      run:
-        shell: bash
-        working-directory: ./logbook
-    env:
-      node-version: '16'
+      env:
+        node-version: '16'
 
     steps:
     - uses: actions/checkout@v2
