@@ -7,7 +7,7 @@ on:
 jobs:
   build:
     env:
-      PYTHONPATH: ${{ github.workspace }}/logbook
+      PYTHONPATH: ${{github.workspace}}/logbook/logbook/src; ${{github.workspace}}/logbook/logbook/test
     runs-on: ubuntu-latest
     defaults:
       run:
