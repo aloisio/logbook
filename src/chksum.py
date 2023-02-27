@@ -5,7 +5,7 @@ from functools import cached_property
 from hashlib import blake2b
 from itertools import filterfalse
 from pathlib import Path
-from typing import Optional, Tuple, Protocol, Union
+from typing import Tuple, Protocol, Union
 
 from adapters import DefaultImageAdapter, ImageAdapter, Image
 
@@ -208,7 +208,7 @@ class ImageFileMetadata(Metadata):
         return self._image_adapter.fractal_dimension(self._file_metadata.image_thumbnail)
 
     @property
-    def size(self) -> Optional[Tuple[int, int]]:
+    def size(self) -> Tuple[int, int]:
         return self._file_metadata.image_size
 
     @property
