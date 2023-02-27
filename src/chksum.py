@@ -184,6 +184,10 @@ class ImageFileMetadata(Metadata):
         self._image_adapter = image_adapter
 
     @property
+    def file_metadata(self):
+        return self._file_metadata
+
+    @property
     def path(self) -> Path:
         return self._file_metadata.path
 
@@ -228,11 +232,8 @@ class FileMetadataFactory:
     def __init__(self, image_adapter=None):
         self.image_adapter = DefaultImageAdapter() if image_adapter is None else image_adapter
 
-    def create_file_metadata(self, path: Path) -> FileMetadata:
-        return FileMetadata(path, self.image_adapter)
-
-    def create_image_file_metadata(self, file_metadata: FileMetadata) -> Metadata:
+    def create_file_metadata(self, path: Path) -> Metadata:
+        file_metadata = FileMetadata(path, self.image_adapter)
         if file_metadata.is_image:
             return ImageFileMetadata(file_metadata, self.image_adapter)
-        else:
-            raise ValueError(file_metadata.path)
+        return file_metadata
