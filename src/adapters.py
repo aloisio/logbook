@@ -69,7 +69,8 @@ class DefaultImageAdapter(ImageAdapter):
                 x = data[:-1]
                 y = data[1:]
                 np.add.at(hist, (x, y), 1)
-        hist = ((hist * 0xFFFFFF) // hist.max(initial=0))
+
+        hist = ((hist * 0xFFFFFF) // np.clip(hist.max(initial=0), a_min=1, a_max=None))
         rgb_hist = Array([(hist >> 16) & 0xFF, (hist >> 8) & 0xFF, hist & 0xFF], dtype=np.uint8).transpose((1, 2, 0))
         histogram_image = PIL.Image.fromarray(rgb_hist, 'RGB')
         digest.update(self._to_bytes(histogram_image))
