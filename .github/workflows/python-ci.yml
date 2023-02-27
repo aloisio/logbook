@@ -6,6 +6,8 @@ on:
 
 jobs:
   build:
+    env:
+      PYTHONPATH: ${{ github.workspace }}/logbook
     runs-on: ubuntu-latest
     defaults:
       run:
