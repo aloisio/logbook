@@ -7,12 +7,12 @@ on:
 jobs:
   build:
     env:
-      PYTHONPATH: ${{github.workspace}}/logbook/src;${{github.workspace}}/logbook/test
+      PYTHONPATH: ${{github.workspace}}/src;${{github.workspace}}/test
     runs-on: ubuntu-latest
     defaults:
       run:
         shell: bash
-        working-directory: .
+        working-directory:
 
     steps:
     - uses: actions/checkout@v3
