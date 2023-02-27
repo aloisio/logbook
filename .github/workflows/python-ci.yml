@@ -14,6 +14,8 @@ jobs:
         shell: bash
 
     steps:
+    - name: Print PYTHONPATH
+      run: echo $PYTHONPATH
     - uses: actions/checkout@v3
     - name: Set up Python 3.9
       uses: actions/setup-python@v3
