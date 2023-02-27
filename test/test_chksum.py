@@ -1,6 +1,7 @@
 from pathlib import Path
 from statistics import quantiles, stdev
 
+import pytest
 from pytest import approx
 
 from chksum import FileMetadataFactory
@@ -31,9 +32,17 @@ def test_checksum_of_text_file(tmp_path):
     assert metadata.path_with_checksum == tmp_path / 'test.f8a5e764340d6f3e.txt'
 
 
+def test_checksum_of_text_file_as_image_file(tmp_path):
+    text_file = tmp_path / 'test.txt'
+    text_file.write_text('Hello World')
+    with pytest.raises(ValueError):
+        FileMetadataFactory().create_image_file_metadata(FileMetadataFactory().create_file_metadata(text_file))
+
+
 def test_checksum_of_greyscale_image_file():
     image_file = Path('sierpinski.jpg')
-    metadata = FileMetadataFactory().create_image_file_metadata(image_file)
+    factory = FileMetadataFactory()
+    metadata = factory.create_image_file_metadata(factory.create_file_metadata(image_file))
     # assert metadata.size == 127620
     # assert stdev(metadata.histogram) == approx(1851.915599)
     # assert quantiles(metadata.fractal_dimension) == list(map(approx, [0.4932759, 0.50088119, 0.7010070]))
@@ -63,7 +72,7 @@ def test_checksum_of_greyscale_image_file_as_file():
 
 def test_checksum_of_colour_image_file():
     image_file = Path('brazil.png')
-    metadata = FileMetadataFactory().create_image_file_metadata(image_file)
+    metadata = FileMetadataFactory().create_image_file_metadata(FileMetadataFactory().create_file_metadata(image_file))
     assert metadata.is_image
     assert metadata.size == (1187, 845)
     assert quantiles(metadata.histogram) == [5.0, 8.0, 15.0]

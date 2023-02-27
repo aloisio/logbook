@@ -6,7 +6,7 @@ from hashlib import blake2b
 from itertools import filterfalse
 from os import stat
 from pathlib import Path
-from typing import Optional, Tuple
+from typing import Optional, Tuple, Protocol
 
 from adapters import DefaultImageAdapter, ImageAdapter
 
@@ -48,39 +48,49 @@ def main(write: bool, *patterns: str):
 
 
 # noinspection PyAttributeOutsideInit
-class FileMetadata:
-    def __init__(self, _path, _image_adapter: ImageAdapter):
-        self._image_adapter = _image_adapter
-        self.path = _path
-        self._is_image = False
+class Metadata(Protocol):
+    @property
+    def path(self) -> Path:
+        ...
 
     @property
-    def size(self) -> int:
-        if not hasattr(self, '_byte_size'):
-            self._byte_size = stat(self.path).st_size
-        return self._byte_size
-
-    @property
-    def checksum(self) -> str:
-        if not hasattr(self, '_checksum'):
-            self._compute_checksum()
-        return self._checksum
-
-    @cached_property
-    def path_with_checksum(self):
-        return self.path.with_name(f'{self.path.stem}.{self.checksum}{self.path.suffix}')
-
-    @property
-    def is_image(self) -> bool:
-        if not hasattr(self, '_is_image'):
-            self._compute_checksum()
-        return self._is_image
+    def histogram(self) -> list[int]:
+        ...
 
     @property
     def entropy(self) -> float:
-        if not hasattr(self, '_byte_entropy'):
-            self._compute_checksum()
-        return self._byte_entropy
+        ...
+
+    @property
+    def size(self) -> int:
+        ...
+
+    @cached_property
+    def path_with_checksum(self):
+        ...
+
+    @property
+    def checksum(self) -> str:
+        ...
+
+    @property
+    def fractal_dimension(self) -> list[float]:
+        ...
+
+    @property
+    def is_image(self) -> bool:
+        ...
+
+
+class FileMetadata(Metadata):
+    def __init__(self, _path, _image_adapter: ImageAdapter):
+        self._image_adapter = _image_adapter
+        self._path = _path
+        self._is_image = False
+
+    @property
+    def path(self) -> Path:
+        return self._path
 
     @property
     def histogram(self) -> list[int]:
@@ -89,10 +99,38 @@ class FileMetadata:
         return self._byte_histogram
 
     @property
+    def entropy(self) -> float:
+        if not hasattr(self, '_byte_entropy'):
+            self._compute_checksum()
+        return self._byte_entropy
+
+    @property
+    def size(self) -> int:
+        if not hasattr(self, '_byte_size'):
+            self._byte_size = stat(self.path).st_size
+        return self._byte_size
+
+    @cached_property
+    def path_with_checksum(self):
+        return self.path.with_name(f'{self.path.stem}.{self.checksum}{self.path.suffix}')
+
+    @property
+    def checksum(self) -> str:
+        if not hasattr(self, '_checksum'):
+            self._compute_checksum()
+        return self._checksum
+
+    @property
     def fractal_dimension(self) -> list[float]:
         if not hasattr(self, '_byte_thumbnail'):
             self._compute_checksum()
         return self._image_adapter.fractal_dimension(self._byte_thumbnail)
+
+    @property
+    def is_image(self) -> bool:
+        if not hasattr(self, '_is_image'):
+            self._compute_checksum()
+        return self._is_image
 
     def _compute_checksum(self):
         """
@@ -118,37 +156,42 @@ class FileMetadata:
 
 
 # noinspection PyAttributeOutsideInit
-class ImageFileMetadata(FileMetadata):
-    def __init__(self, _path, _image_adapter: ImageAdapter):
-        super().__init__(_path, _image_adapter)
+class ImageFileMetadata(Metadata):
+    def __init__(self, file_metadata: FileMetadata, image_adapter: ImageAdapter):
+        self._file_metadata = file_metadata
+        self._image_adapter = image_adapter
+
+    @property
+    def path(self) -> Path:
+        return self._file_metadata.path
 
     @cached_property
     def fractal_dimension(self) -> list[float]:
-        if not hasattr(self, '_image_thumbnail'):
-            self._compute_checksum()
-        return self._image_adapter.fractal_dimension(self._image_thumbnail)
+        if not hasattr(self._file_metadata, '_image_thumbnail'):
+            self._file_metadata._compute_checksum()
+        return self._image_adapter.fractal_dimension(self._file_metadata._image_thumbnail)
 
     @property
     def size(self) -> Optional[Tuple[int, int]]:
-        if not hasattr(self, '_image_size'):
-            self._compute_checksum()
-        return self._image_size
+        if not hasattr(self._file_metadata, '_image_size'):
+            self._file_metadata._compute_checksum()
+        return self._file_metadata._image_size
 
     @property
     def is_image(self) -> bool:
-        return True
+        return self._file_metadata.is_image
 
     @property
     def entropy(self) -> float:
-        if not hasattr(self, '_byte_entropy'):
-            self._compute_checksum()
-        return self._image_entropy
+        if not hasattr(self._file_metadata, '_image_entropy'):
+            self._file_metadata._compute_checksum()
+        return self._file_metadata._image_entropy
 
     @property
     def histogram(self) -> list[int]:
-        if not hasattr(self, '_image_histogram'):
-            self._compute_checksum()
-        return self._image_histogram
+        if not hasattr(self._file_metadata, '_image_histogram'):
+            self._file_metadata._compute_checksum()
+        return self._file_metadata._image_histogram
 
 
 if __name__ == '__main__':
@@ -166,5 +209,7 @@ class FileMetadataFactory:
     def create_file_metadata(self, path: Path) -> FileMetadata:
         return FileMetadata(path, self.image_adapter)
 
-    def create_image_file_metadata(self, path: Path) -> FileMetadata:
-        return ImageFileMetadata(path, self.image_adapter)
+    def create_image_file_metadata(self, file_metadata: FileMetadata) -> FileMetadata:
+        if file_metadata.is_image:
+            return ImageFileMetadata(file_metadata)
+        raise ValueError(file_metadata.path)

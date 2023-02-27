@@ -3,7 +3,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from chksum import FileMetadataFactory, FileMetadata, ImageFileMetadata
+from chksum import FileMetadataFactory, FileMetadata, ImageFileMetadata, Metadata
 
 
 @pytest.fixture
@@ -42,9 +42,7 @@ def test_create_file_metadata():
 def test_image_file_metadata():
     image_adapter = MagicMock()
     path = Path('/path/to/image.jpg')
-    file_metadata = ImageFileMetadata(path, image_adapter)
+    file_metadata = ImageFileMetadata(FileMetadata(path, image_adapter), image_adapter)
 
-    assert isinstance(file_metadata, FileMetadata)
-    assert isinstance(file_metadata, ImageFileMetadata)
     assert file_metadata.path == path
     assert file_metadata._image_adapter == image_adapter
