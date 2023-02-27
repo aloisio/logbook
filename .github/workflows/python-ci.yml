@@ -4,12 +4,15 @@ on:
   push:
     branches: [ master ]
 
+defaults:
+  run:
+    shell: bash
+  env:
+    node-version: '16'
+
 jobs:
   build:
     runs-on: ubuntu-latest
-    defaults:
-      env:
-        node-version: '16'
 
     steps:
     - uses: actions/checkout@v2
