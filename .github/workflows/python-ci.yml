@@ -12,7 +12,7 @@ jobs:
 
     steps:
     - name: Load environment variables
-      run: source env.list
+      run: source ${{github.workspace}}/env.list
 
     - name: Print PYTHONPATH
       run: echo $PYTHONPATH
