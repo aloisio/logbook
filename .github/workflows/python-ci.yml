@@ -13,7 +13,7 @@ jobs:
     steps:
       - name: Load environment variables
         run: |
-          mv ${{github.workspace}}/env.list .
+          mv env.list ${{github.workspace}}
           source env.list
 
       - name: Print PYTHONPATH
