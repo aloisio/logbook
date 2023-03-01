@@ -41,8 +41,7 @@ jobs:
 
       - name: Run tests
         env:
-          PYTHONPATH: ${{ env.PYTHONPATH }}
         run: |
-          echo PYTHONPATH: $PYTHONPATH
+          export PYTHONPATH=${{github.workspace}}/src:${{github.workspace}}/test
           source .venv/bin/activate
           pytest
