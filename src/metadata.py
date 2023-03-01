@@ -11,9 +11,7 @@ Metadata = ForwardRef('Metadata')
 
 # noinspection PyPropertyDefinition, PyRedeclaration
 class Metadata(Protocol):
-    @property
-    def checksum(self) -> str:
-        ...
+    ...
 
 
 # noinspection PyAttributeOutsideInit
@@ -117,14 +115,9 @@ class ImageFileMetadata(FileMetadata):
 
 
 class AudioFileMetadata(Metadata):
-    def __init__(self, path: Path, checksum: str, audio_adapter: AudioAdapter):
+    def __init__(self, path: Path, audio_adapter: AudioAdapter):
         self._path = path
-        self._checksum = checksum
         self._audio_adapter = audio_adapter
-
-    @property
-    def checksum(self) -> str:
-        return self._checksum
 
     @property
     def duration(self) -> float:
@@ -143,5 +136,5 @@ class FileMetadataFactory:
         if self.file_type_adapter.is_image(path):
             metadata[ImageFileMetadata] = ImageFileMetadata(path, self.image_adapter)
         if self.file_type_adapter.is_audio(path):
-            metadata[AudioFileMetadata] = AudioFileMetadata(path, metadata[FileMetadata].checksum, self.audio_adapter)
+            metadata[AudioFileMetadata] = AudioFileMetadata(path, self.audio_adapter)
         return metadata
