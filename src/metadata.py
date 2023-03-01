@@ -1,7 +1,7 @@
 from functools import cached_property
 from hashlib import blake2b
 from pathlib import Path
-from typing import Protocol, Union, Tuple, ForwardRef
+from typing import Protocol, Tuple, ForwardRef
 
 from adapters import ImageAdapter, Image, AudioAdapter, DefaultImageAdapter, DefaultAudioAdapter, FileTypeAdapter, \
     DefaultFileTypeAdapter
@@ -12,39 +12,7 @@ Metadata = ForwardRef('Metadata')
 # noinspection PyPropertyDefinition, PyRedeclaration
 class Metadata(Protocol):
     @property
-    def path(self) -> Path:
-        ...
-
-    @property
-    def histogram(self) -> list[int]:
-        ...
-
-    @property
-    def entropy(self) -> float:
-        ...
-
-    @property
-    def size(self) -> Union[int, Tuple[int, int], float]:
-        ...
-
-    @property
-    def path_with_checksum(self) -> Path:
-        ...
-
-    @property
     def checksum(self) -> str:
-        ...
-
-    @property
-    def fractal_dimension(self) -> list[float]:
-        ...
-
-    @property
-    def is_image(self) -> bool:
-        ...
-
-    @property
-    def metadata(self) -> list[Metadata]:
         ...
 
 
@@ -99,10 +67,6 @@ class FileMetadata(Metadata):
         return self._is_image
 
     @property
-    def metadata(self) -> list[Metadata]:
-        return []
-
-    @property
     def image_histogram(self) -> list[int]:
         if not hasattr(self, '_image_histogram'):
             self._compute_metadata()
@@ -153,72 +117,54 @@ class FileMetadata(Metadata):
         self._checksum = digest.hexdigest()
 
 
-class ImageFileMetadata(Metadata):
-    def __init__(self, file_metadata: FileMetadata, image_adapter: ImageAdapter):
-        self._file_metadata = file_metadata
-        self._image_adapter = image_adapter
-
-    @property
-    def metadata(self) -> list[Metadata]:
-        return [self._file_metadata]
-
-    @property
-    def path(self) -> Path:
-        return self._file_metadata.path
-
-    @property
-    def path_with_checksum(self) -> Path:
-        return self._file_metadata.path_with_checksum
-
-    @property
-    def checksum(self) -> str:
-        return self._file_metadata.checksum
-
-    @property
-    def fractal_dimension(self) -> list[float]:
-        return self._image_adapter.fractal_dimension(self._file_metadata.image_thumbnail)
-
-    @property
-    def size(self) -> Tuple[int, int]:
-        return self._file_metadata.image_size
-
-    @property
-    def is_image(self) -> bool:
-        return self._file_metadata.is_image
-
-    @property
-    def entropy(self) -> float:
-        return self._file_metadata.image_entropy
+class ImageFileMetadata(FileMetadata):
+    def __init__(self, path, image_adapter: ImageAdapter):
+        super().__init__(path, image_adapter)
 
     @property
     def histogram(self) -> list[int]:
-        return self._file_metadata.image_histogram
+        if not hasattr(self, '_image_histogram'):
+            self._compute_metadata()
+        return self._image_histogram
+
+    @property
+    def entropy(self) -> float:
+        if not hasattr(self, '_image_entropy'):
+            self._compute_metadata()
+        return self._image_entropy
+
+    @property
+    def size(self) -> Tuple[int, int]:
+        if not hasattr(self, '_image_size'):
+            self._compute_metadata()
+        return self._image_size
+
+    @property
+    def fractal_dimension(self) -> list[float]:
+        if not hasattr(self, '_image_thumbnail'):
+            self._compute_metadata()
+        return self._image_adapter.fractal_dimension(self._image_thumbnail)
+
+    @property
+    def is_image(self) -> bool:
+        if not hasattr(self, '_is_image'):
+            self._compute_metadata()
+        return self._is_image
 
 
 class AudioFileMetadata(Metadata):
-    def __init__(self, file_metadata: FileMetadata, audio_adapter: AudioAdapter):
-        self._file_metadata = file_metadata
+    def __init__(self, path: Path, checksum: str, audio_adapter: AudioAdapter):
+        self._path = path
+        self._checksum = checksum
         self._audio_adapter = audio_adapter
 
     @property
-    def path(self) -> Path:
-        return self._file_metadata.path
-
-    @property
-    def size(self) -> Union[int, Tuple[int, int], float]:
-        return self._audio_adapter.duration(self._file_metadata.path)
-
-    @property
-    def path_with_checksum(self) -> Path:
-        return self._file_metadata.path_with_checksum
-
-    @property
     def checksum(self) -> str:
-        return self._file_metadata.checksum
+        return self._checksum
 
     @property
-    def metadata(self) -> list[Metadata]:
-        return [self._file_metadata]
+    def duration(self) -> float:
+        return self._audio_adapter.duration(self._path)
 
 
 class FileMetadataFactory:
@@ -231,7 +177,15 @@ class FileMetadataFactory:
     def create_file_metadata(self, path: Path) -> Metadata:
         file_metadata = FileMetadata(path, self.image_adapter)
         if file_metadata.is_image:
-            return ImageFileMetadata(file_metadata, self.image_adapter)
+            return ImageFileMetadata(path, self.image_adapter)
         if self.file_type_adapter.is_audio(path):
-            return AudioFileMetadata(file_metadata, self.audio_adapter)
+            return AudioFileMetadata(path, file_metadata.checksum, self.audio_adapter)
         return file_metadata
+
+    def create_metadata(self, path: Path) -> dict[type(Metadata), Metadata]:
+        metadata = {FileMetadata: FileMetadata(path, self.image_adapter)}
+        if self.file_type_adapter.is_image(path):
+            metadata[ImageFileMetadata] = ImageFileMetadata(path, self.image_adapter)
+        if self.file_type_adapter.is_audio(path):
+            metadata[AudioFileMetadata] = AudioFileMetadata(path, metadata[FileMetadata].checksum, self.audio_adapter)
+        return metadata

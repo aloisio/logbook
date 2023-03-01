@@ -22,27 +22,28 @@ def file_factory():
 
 def test_file_metadata_creation(sample_file, file_factory):
     """Test the creation of FileMetadata object using the factory"""
-    metadata = file_factory.create_file_metadata(sample_file)
+    metadata = file_factory.create_metadata(sample_file)[FileMetadata]
+    assert isinstance(metadata, FileMetadata)
     assert metadata.path == sample_file
     assert metadata.size == 11
 
 
 def test_create_file_metadata():
     mock_image_adapter = MagicMock()
+    mock_file_type_adapter = MagicMock()
     file_path = Path('/path/to/file.txt')
-
-    with patch('metadata.ImageAdapter', return_value=mock_image_adapter):
-        file_metadata = FileMetadataFactory(mock_image_adapter).create_file_metadata(file_path)
-
-    assert isinstance(file_metadata, ImageFileMetadata)
-    assert file_metadata.path == file_path
-    assert file_metadata._image_adapter == mock_image_adapter
+    mock_image_adapter.is_image.return_value = True
+    factory = FileMetadataFactory(image_adapter=mock_image_adapter, file_type_adapter=mock_file_type_adapter)
+    metadata = factory.create_metadata(file_path)[ImageFileMetadata]
+    assert isinstance(metadata, ImageFileMetadata)
+    assert metadata.path == file_path
+    assert metadata._image_adapter == mock_image_adapter
 
 
 def test_image_file_metadata():
     image_adapter = MagicMock()
     path = Path('/path/to/image.jpg')
-    file_metadata = ImageFileMetadata(FileMetadata(path, image_adapter), image_adapter)
+    file_metadata = ImageFileMetadata(path, image_adapter)
 
     assert file_metadata.path == path
     assert file_metadata._image_adapter == image_adapter
