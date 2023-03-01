@@ -6,9 +6,9 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
-#    defaults:
-#      run:
-#        shell: bash
+    #    defaults:
+    #      run:
+    #        shell: bash
 
     steps:
       - name: 'Create env file'
@@ -40,7 +40,8 @@ jobs:
           pip install -r requirements.txt
 
       - name: Run tests
+        env:
+          PYTHONPATH: ${{ env.PYTHONPATH }}
         run: |
           source .venv/bin/activate
-          export PYTHONPATH=$PYTHONPATH
           pytest
