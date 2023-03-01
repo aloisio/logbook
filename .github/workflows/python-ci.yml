@@ -13,12 +13,12 @@ jobs:
     steps:
       - name: 'Create env file'
         run: |
-          touch .env
-          echo export PYTHONPATH=${{github.workspace}}/src:${{github.workspace}}/test >> .env
-          cat .env
+          touch env.list
+          echo export PYTHONPATH=${{github.workspace}}/src:${{github.workspace}}/test >> env
+          cat env.list
       - name: Load environment variables
         run: |
-          source .env
+          source env.list
           echo "Loaded environment variables"
       - name: Print PYTHONPATH
         run: echo $PYTHONPATH
