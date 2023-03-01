@@ -1,9 +1,9 @@
 from functools import cached_property
 from hashlib import blake2b
 from pathlib import Path
-from typing import Protocol, Tuple, ForwardRef
+from typing import Protocol, Tuple, ForwardRef, Type
 
-from adapters import ImageAdapter, Image, AudioAdapter, DefaultImageAdapter, DefaultAudioAdapter, FileTypeAdapter, \
+from adapters import ImageAdapter, AudioAdapter, DefaultImageAdapter, DefaultAudioAdapter, FileTypeAdapter, \
     DefaultFileTypeAdapter
 
 Metadata = ForwardRef('Metadata')
@@ -60,36 +60,6 @@ class FileMetadata(Metadata):
             self._compute_metadata()
         return self._image_adapter.fractal_dimension(self._byte_thumbnail)
 
-    @property
-    def is_image(self) -> bool:
-        if not hasattr(self, '_is_image'):
-            self._compute_metadata()
-        return self._is_image
-
-    @property
-    def image_histogram(self) -> list[int]:
-        if not hasattr(self, '_image_histogram'):
-            self._compute_metadata()
-        return self._image_histogram
-
-    @property
-    def image_entropy(self) -> float:
-        if not hasattr(self, '_image_entropy'):
-            self._compute_metadata()
-        return self._image_entropy
-
-    @property
-    def image_size(self) -> Tuple[int, int]:
-        if not hasattr(self, '_image_size'):
-            self._compute_metadata()
-        return self._image_size
-
-    @property
-    def image_thumbnail(self) -> Image:
-        if not hasattr(self, '_image_thumbnail'):
-            self._compute_metadata()
-        return self._image_thumbnail
-
     def _compute_metadata(self):
         """
         Initializes fields: _byte_histogram, _byte_thumbnail, _checksum, _histogram_entropy,
@@ -145,12 +115,6 @@ class ImageFileMetadata(FileMetadata):
             self._compute_metadata()
         return self._image_adapter.fractal_dimension(self._image_thumbnail)
 
-    @property
-    def is_image(self) -> bool:
-        if not hasattr(self, '_is_image'):
-            self._compute_metadata()
-        return self._is_image
-
 
 class AudioFileMetadata(Metadata):
     def __init__(self, path: Path, checksum: str, audio_adapter: AudioAdapter):
@@ -174,15 +138,7 @@ class FileMetadataFactory:
         self.audio_adapter = DefaultAudioAdapter() if audio_adapter is None else audio_adapter
         self.file_type_adapter = DefaultFileTypeAdapter() if file_type_adapter is None else file_type_adapter
 
-    def create_file_metadata(self, path: Path) -> Metadata:
-        file_metadata = FileMetadata(path, self.image_adapter)
-        if file_metadata.is_image:
-            return ImageFileMetadata(path, self.image_adapter)
-        if self.file_type_adapter.is_audio(path):
-            return AudioFileMetadata(path, file_metadata.checksum, self.audio_adapter)
-        return file_metadata
-
-    def create_metadata(self, path: Path) -> dict[type(Metadata), Metadata]:
+    def create_metadata(self, path: Path) -> dict[Type[Metadata], Metadata]:
         metadata = {FileMetadata: FileMetadata(path, self.image_adapter)}
         if self.file_type_adapter.is_image(path):
             metadata[ImageFileMetadata] = ImageFileMetadata(path, self.image_adapter)
