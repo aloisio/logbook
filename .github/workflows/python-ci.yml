@@ -9,7 +9,8 @@ on:
 jobs:
   build:
     env:
-      PYTHONPATH: ${{github.workspace}}/src:${{github.workspace}}/test
+      PYTHONPATH: ${{ env.PYTHONPATH }}
+    env_file: env.list
     runs-on: ubuntu-latest
     defaults:
       run:
