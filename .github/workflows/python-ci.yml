@@ -6,15 +6,15 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        shell: bash
+#    defaults:
+#      run:
+#        shell: bash
 
     steps:
       - name: 'Create env file'
         run: |
           touch env.list
-          echo export PYTHONPATH=${{github.workspace}}/src:${{github.workspace}}/test >> env.list
+          echo PYTHONPATH=${{github.workspace}}/src:${{github.workspace}}/test >> env.list
           cat env.list
       - name: Load environment variables
         run: |
