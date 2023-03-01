@@ -6,23 +6,11 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
-    #    defaults:
-    #      run:
-    #        shell: bash
+    defaults:
+      run:
+        shell: bash
 
     steps:
-      - name: 'Create env file'
-        run: |
-          touch env.list
-          echo export PYTHONPATH=${{github.workspace}}/src:${{github.workspace}}/test >> env.list
-          cat env.list
-
-      - name: Load environment variables
-        run: |
-          source env.list
-          echo "Loaded environment variables"
-          echo $PYTHONPATH
-
       - name: Checkout code
         uses: actions/checkout@v3
 
@@ -33,7 +21,6 @@ jobs:
 
       - name: Install dependencies
         run: |
-          sudo apt-get update
           sudo apt-get install -y libsndfile1 ffmpeg
           python -m venv .venv
           source .venv/bin/activate
