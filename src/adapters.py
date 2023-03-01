@@ -4,6 +4,7 @@ from typing import Protocol, Optional
 
 import PIL.Image
 import librosa
+import magic
 import numpy as np
 
 import fracdim
@@ -122,3 +123,19 @@ class DefaultAudioAdapter(AudioAdapter):
     def duration(self, path: Path) -> float:
         y, sr = librosa.load(path.as_posix())
         return librosa.get_duration(y=y, sr=sr)
+
+
+class FileTypeAdapter(Protocol):
+    def is_image(self, path: Path) -> bool:
+        ...
+
+    def is_audio(self, path: Path) -> bool:
+        ...
+
+
+class DefaultFileTypeAdapter(FileTypeAdapter):
+    def is_image(self, path: Path) -> bool:
+        return (mime := magic.from_file(path, mime=True)) and mime.startswith('image')
+
+    def is_audio(self, path: Path) -> bool:
+        return (mime := magic.from_file(path, mime=True)) and mime.startswith('audio')

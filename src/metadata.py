@@ -3,8 +3,8 @@ from hashlib import blake2b
 from pathlib import Path
 from typing import Protocol, Union, Tuple, ForwardRef
 
-from adapters import ImageAdapter, Image, AudioAdapter, DefaultImageAdapter, DefaultAudioAdapter
-from test.adapters import FileTypeAdapter, DefaultFileTypeAdapter
+from adapters import ImageAdapter, Image, AudioAdapter, DefaultImageAdapter, DefaultAudioAdapter, FileTypeAdapter, \
+    DefaultFileTypeAdapter
 
 Metadata = ForwardRef('Metadata')
 
