@@ -3,6 +3,7 @@ from pathlib import Path
 from typing import Protocol, Optional
 
 import PIL.Image
+import librosa
 import numpy as np
 
 import fracdim
@@ -44,6 +45,11 @@ class ImageAdapter(Protocol):
     @property
     def last_size(self) -> Optional[tuple[int, int]]:
         raise NotImplemented
+
+
+class AudioAdapter(Protocol):
+    def duration(self, path: Path) -> float:
+        ...
 
 
 class NullDigest(Digest):
@@ -110,3 +116,9 @@ class DefaultImageAdapter(ImageAdapter):
     def _to_bytes(image: Image) -> bytes:
         # noinspection PyTypeChecker
         return Array(image).flatten().tobytes()
+
+
+class DefaultAudioAdapter(AudioAdapter):
+    def duration(self, path: Path) -> float:
+        y, sr = librosa.load(path.as_posix())
+        return librosa.get_duration(y=y, sr=sr)

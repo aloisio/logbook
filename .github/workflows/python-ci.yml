@@ -3,6 +3,8 @@ name: Python CI
 on:
   push:
     branches: [ master ]
+  pull_request:
+    branches: [ master ]
 
 jobs:
   build:
@@ -16,14 +18,24 @@ jobs:
     steps:
     - name: Print PYTHONPATH
       run: echo $PYTHONPATH
-    - uses: actions/checkout@v3
+
+    - name: Checkout code
+      uses: actions/checkout@v3
+
     - name: Set up Python 3.9
       uses: actions/setup-python@v3
       with:
         python-version: 3.9
+
     - name: Install dependencies
       run: |
-        python -m pip install --upgrade pip
+        sudo apt-get update
+        sudo apt-get install -y libsndfile1 ffmpeg
+        python -m venv .venv
+        source .venv/bin/activate
         pip install -r requirements.txt
+
     - name: Run tests
-      run: pytest
+      run: |
+        source .venv/bin/activate
+        pytest

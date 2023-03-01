@@ -3,7 +3,7 @@ from statistics import quantiles, stdev
 
 from pytest import approx
 
-from chksum import FileMetadataFactory, FileMetadata, ImageFileMetadata
+from metadata import FileMetadata, ImageFileMetadata, FileMetadataFactory
 
 
 def test_checksum_of_empty_file(tmp_path):
@@ -45,7 +45,7 @@ def test_checksum_of_greyscale_image_file():
     assert metadata.entropy == approx(3.0831189)
     assert metadata.checksum == '8b75f4bc101858f0'
     assert metadata.path_with_checksum == image_file.parent / 'sierpinski.8b75f4bc101858f0.jpg'
-    metadata = metadata.file_metadata
+    metadata = metadata.metadata[0]
     assert metadata.size == 127620
     assert stdev(metadata.histogram) == approx(1851.915599)
     assert quantiles(metadata.fractal_dimension) == list(map(approx, [0.4932759, 0.50088119, 0.7010070]))
@@ -68,7 +68,7 @@ def test_checksum_of_colour_image_file():
     assert metadata.entropy == approx(1.278420)
     assert metadata.checksum == '65ba3ca674200803'
     assert metadata.path_with_checksum == image_file.parent / 'brazil.65ba3ca674200803.png'
-    metadata = metadata.file_metadata
+    metadata = metadata.metadata[0]
     assert metadata.size == 19845
     assert stdev(metadata.histogram) == approx(3309.278007)
     assert quantiles(metadata.fractal_dimension) == list(map(approx, [0.21160032, 1.9942328, 1.9943503]))
