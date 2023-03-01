@@ -16,6 +16,7 @@ jobs:
           touch env.list
           echo export PYTHONPATH=${{github.workspace}}/src:${{github.workspace}}/test >> env.list
           cat env.list
+
       - name: Load environment variables
         run: |
           source env.list
@@ -41,4 +42,5 @@ jobs:
       - name: Run tests
         run: |
           source .venv/bin/activate
+          source env.list
           pytest
