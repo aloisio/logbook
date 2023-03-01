@@ -1,16 +1,8 @@
-name: Python CI
-
-on:
-  push:
-    branches: [ master ]
-  pull_request:
-    branches: [ master ]
-
 jobs:
   build:
-    runs-on: ubuntu-latest
     env:
       PYTHONPATH: ${{ env.PYTHONPATH }}
+    runs-on: ubuntu-latest
     defaults:
       run:
         shell: bash
@@ -27,6 +19,11 @@ jobs:
       with:
         python-version: 3.9
 
+    - name: Load environment variables
+      env:
+        env_file: env.list
+      run: source env.list
+
     - name: Install dependencies
       run: |
         sudo apt-get update
@@ -34,10 +31,6 @@ jobs:
         python -m venv .venv
         source .venv/bin/activate
         pip install -r requirements.txt
-
-    - name: Load environment variables
-      run: |
-        source env.list
 
     - name: Run tests
       run: |
