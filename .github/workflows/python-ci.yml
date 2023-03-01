@@ -43,5 +43,6 @@ jobs:
         env:
           PYTHONPATH: ${{ env.PYTHONPATH }}
         run: |
+          echo $PYTHONPATH
           source .venv/bin/activate
           pytest
