@@ -5,7 +5,7 @@ on:
 
 jobs:
   build:
-    runs-on: python:3.9-slim
+    runs-on: ubuntu-latest
     defaults:
       run:
         shell: bash
