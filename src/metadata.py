@@ -1,12 +1,10 @@
 from functools import cached_property
 from hashlib import blake2b
 from pathlib import Path
-from typing import Protocol, Tuple, ForwardRef, Type
+from typing import Protocol, Tuple, Type
 
 from adapters import (ImageAdapter, AudioAdapter, DefaultImageAdapter, DefaultAudioAdapter, FileTypeAdapter,
                       DefaultFileTypeAdapter, Digest, NullDigest)
-
-Metadata = ForwardRef('Metadata')
 
 
 # noinspection PyPropertyDefinition, PyRedeclaration
@@ -108,18 +106,18 @@ class AudioFileMetadata(Metadata):
 
 
 class FileMetadataFactory:
-    def __init__(self, image_adapter: ImageAdapter = None, audio_adapter: AudioAdapter = None,
-                 file_type_adapter: FileTypeAdapter = None):
-        self.image_adapter = DefaultImageAdapter() if image_adapter is None else image_adapter
-        self.audio_adapter = DefaultAudioAdapter() if audio_adapter is None else audio_adapter
-        self.file_type_adapter = DefaultFileTypeAdapter() if file_type_adapter is None else file_type_adapter
+    def __init__(self, digest:Digest = None, image_adapter: ImageAdapter = None, audio_adapter: AudioAdapter = None, file_type_adapter: FileTypeAdapter = None):
+        self._digest = digest if digest is not None else blake2b(digest_size=8)
+        self._image_adapter = image_adapter if image_adapter else DefaultImageAdapter()
+        self._audio_adapter = audio_adapter if audio_adapter is not None else DefaultAudioAdapter()
+        self._file_type_adapter = file_type_adapter if file_type_adapter is not None else DefaultFileTypeAdapter()
 
     def create_metadata(self, path: Path) -> dict[Type[Metadata], Metadata]:
-        file_metadata = FileMetadata(path, self.image_adapter, blake2b(digest_size=8))
+        file_metadata = FileMetadata(path, self._image_adapter, self._digest)
         metadata = {FileMetadata: file_metadata}
-        if self.file_type_adapter.is_image(path):
-            image_file_metadata = ImageFileMetadata(path, self.image_adapter)
+        if self._file_type_adapter.is_image(path):
+            image_file_metadata = ImageFileMetadata(path, self._image_adapter)
             metadata[ImageFileMetadata] = image_file_metadata
-        if self.file_type_adapter.is_audio(path):
-            metadata[AudioFileMetadata] = AudioFileMetadata(path, self.audio_adapter)
+        if self._file_type_adapter.is_audio(path):
+            metadata[AudioFileMetadata] = AudioFileMetadata(path, self._audio_adapter)
         return metadata
