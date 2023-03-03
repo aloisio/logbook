@@ -5,6 +5,7 @@ import pytest
 
 from metadata import FileMetadata, ImageFileMetadata, FileMetadataFactory
 
+FIXTURES = Path(__file__).parent
 
 @pytest.fixture
 def sample_file(tmp_path):
@@ -31,7 +32,7 @@ def test_file_metadata_creation(sample_file, file_factory):
 def test_create_file_metadata():
     mock_image_adapter = MagicMock()
     mock_file_type_adapter = MagicMock()
-    file_path = Path('sierpinski.jpg')
+    file_path = Path(FIXTURES / 'sierpinski.jpg')
     mock_image_adapter.is_image.return_value = True
     factory = FileMetadataFactory(image_adapter=mock_image_adapter, file_type_adapter=mock_file_type_adapter)
     metadata = factory.create_metadata(file_path)[ImageFileMetadata]
@@ -42,7 +43,7 @@ def test_create_file_metadata():
 
 def test_image_file_metadata():
     image_adapter = MagicMock()
-    path = Path('sierpinski.jpg')
+    path = Path(FIXTURES /'sierpinski.jpg')
     file_metadata = ImageFileMetadata(path, image_adapter)
 
     assert file_metadata.path == path
