@@ -14,10 +14,10 @@ jobs:
       - name: Check cache directory
         run: |
           if [ ! -d /var/cache/apt/archives ]; then
-            mkdir -p /var/cache/apt/archives
+            sudo mkdir -p /var/cache/apt/archives
           fi
-          chown -R $USER:$USER /var/cache/apt/archives
-          chmod -R 777 /var/cache/apt/archives  
+          sudo chown -R $USER:$USER /var/cache/apt/archives
+          sudo chmod -R 777 /var/cache/apt/archives  
 
       - name: Cache dependencies
         uses: actions/cache@v3
