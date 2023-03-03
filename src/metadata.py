@@ -3,8 +3,8 @@ from hashlib import blake2b
 from pathlib import Path
 from typing import Protocol, Tuple, ForwardRef, Type
 
-from adapters import ImageAdapter, AudioAdapter, DefaultImageAdapter, DefaultAudioAdapter, FileTypeAdapter, \
-    DefaultFileTypeAdapter
+from adapters import (ImageAdapter, AudioAdapter, DefaultImageAdapter, DefaultAudioAdapter, FileTypeAdapter,
+                      DefaultFileTypeAdapter, Digest, NullDigest)
 
 Metadata = ForwardRef('Metadata')
 
@@ -16,9 +16,11 @@ class Metadata(Protocol):
 
 # noinspection PyAttributeOutsideInit
 class FileMetadata(Metadata):
-    def __init__(self, path, image_adapter: ImageAdapter):
+    def __init__(self, path, image_adapter: ImageAdapter, digest: Digest = None):
         self._image_adapter = image_adapter
         self._path = path
+        self._digest = digest if digest is not None else NullDigest()
+        self._compute_metadata()
 
     @property
     def path(self) -> Path:
@@ -26,20 +28,14 @@ class FileMetadata(Metadata):
 
     @property
     def histogram(self) -> list[int]:
-        if not hasattr(self, '_byte_histogram'):
-            self._compute_metadata()
         return self._byte_histogram
 
     @property
     def entropy(self) -> float:
-        if not hasattr(self, '_byte_entropy'):
-            self._compute_metadata()
         return self._byte_entropy
 
     @property
     def size(self) -> int:
-        if not hasattr(self, '_byte_size'):
-            self._byte_size = self.path.stat().st_size
         return self._byte_size
 
     @cached_property
@@ -48,70 +44,57 @@ class FileMetadata(Metadata):
 
     @property
     def checksum(self) -> str:
-        if not hasattr(self, '_checksum'):
-            self._compute_metadata()
         return self._checksum
 
-    @property
+    @cached_property
     def fractal_dimension(self) -> list[float]:
-        if not hasattr(self, '_byte_thumbnail'):
-            self._compute_metadata()
         return self._image_adapter.fractal_dimension(self._byte_thumbnail)
 
     def _compute_metadata(self):
+        if hasattr(self, '_checksum'):
+            return
         """
-        Initializes fields: _byte_histogram, _byte_thumbnail, _checksum, _histogram_entropy,
-        _image_entropy, _image_histogram, _image_size, _image_thumbnail, _is_image_
+        Creates fields: _byte_entropy, _byte_histogram, _byte_size, _byte_thumbnail, _checksum
         """
-        digest = blake2b(digest_size=8)
-        histogram_image = self._image_adapter.histogram(self.path, digest)
+        self._byte_size = self.path.stat().st_size
+        histogram_image = self._image_adapter.histogram(self.path, self._digest)
         self._byte_entropy = self._image_adapter.last_entropy
         self._byte_histogram = self._image_adapter.rgb_histogram(histogram_image)
         self._byte_thumbnail = self._image_adapter.to_grayscale(histogram_image)
-        # noinspection PyBroadException
-        try:
-            thumbnail_image = self._image_adapter.thumbnail(self.path, digest)
-            self._image_size = self._image_adapter.last_size
-            self._image_entropy = self._image_adapter.last_entropy
-            self._image_histogram = self._image_adapter.rgb_histogram(thumbnail_image)
-            self._image_thumbnail = self._image_adapter.to_grayscale(thumbnail_image)
-            self._is_image = True
-        except Exception:
-            self._image_size = None
-            self._image_entropy = None
-            self._image_histogram = None
-            self._image_thumbnail = None
-            self._is_image = False
-        self._checksum = digest.hexdigest()
+        self._checksum = self._digest.hexdigest()
 
 
-class ImageFileMetadata(FileMetadata):
+class ImageFileMetadata(Metadata):
     def __init__(self, path, image_adapter: ImageAdapter):
-        super().__init__(path, image_adapter)
+        self.path = path
+        self._image_adapter = image_adapter
+        self._compute_metadata()
 
     @property
     def histogram(self) -> list[int]:
-        if not hasattr(self, '_image_histogram'):
-            self._compute_metadata()
         return self._image_histogram
 
     @property
     def entropy(self) -> float:
-        if not hasattr(self, '_image_entropy'):
-            self._compute_metadata()
         return self._image_entropy
 
     @property
     def size(self) -> Tuple[int, int]:
-        if not hasattr(self, '_image_size'):
-            self._compute_metadata()
         return self._image_size
 
-    @property
+    @cached_property
     def fractal_dimension(self) -> list[float]:
-        if not hasattr(self, '_image_thumbnail'):
-            self._compute_metadata()
         return self._image_adapter.fractal_dimension(self._image_thumbnail)
+
+    def _compute_metadata(self):
+        """
+        Creates fields: _checksum, _image_entropy, _image_histogram, _image_size, _image_thumbnail
+        """
+        thumbnail_image = self._image_adapter.thumbnail(self.path)
+        self._image_size = self._image_adapter.last_size
+        self._image_entropy = self._image_adapter.last_entropy
+        self._image_histogram = self._image_adapter.rgb_histogram(thumbnail_image)
+        self._image_thumbnail = self._image_adapter.to_grayscale(thumbnail_image)
 
 
 class AudioFileMetadata(Metadata):
@@ -132,9 +115,11 @@ class FileMetadataFactory:
         self.file_type_adapter = DefaultFileTypeAdapter() if file_type_adapter is None else file_type_adapter
 
     def create_metadata(self, path: Path) -> dict[Type[Metadata], Metadata]:
-        metadata = {FileMetadata: FileMetadata(path, self.image_adapter)}
+        file_metadata = FileMetadata(path, self.image_adapter, blake2b(digest_size=8))
+        metadata = {FileMetadata: file_metadata}
         if self.file_type_adapter.is_image(path):
-            metadata[ImageFileMetadata] = ImageFileMetadata(path, self.image_adapter)
+            image_file_metadata = ImageFileMetadata(path, self.image_adapter)
+            metadata[ImageFileMetadata] = image_file_metadata
         if self.file_type_adapter.is_audio(path):
             metadata[AudioFileMetadata] = AudioFileMetadata(path, self.audio_adapter)
         return metadata

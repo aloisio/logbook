@@ -15,6 +15,7 @@ def test_checksum_of_empty_file(tmp_path):
     assert metadata.histogram == ([256 * 256] + 255 * [0]) * 3
     assert metadata.fractal_dimension == [approx(0)] * 256
     assert metadata.entropy == approx(1.584962)
+    assert metadata.checksum == '700ccbe90581dc21'
     assert metadata.path_with_checksum == tmp_path / 'test.700ccbe90581dc21.txt'
 
 
@@ -41,8 +42,6 @@ def test_checksum_of_greyscale_image_file():
     assert quantiles(metadata.histogram) == [27.0, 40.5, 73.0]
     assert quantiles(metadata.fractal_dimension) == [approx(1.5880126), approx(1.643898), approx(1.660302)]
     assert metadata.entropy == approx(3.0831189)
-    assert metadata.checksum == '8b75f4bc101858f0'
-    assert metadata.path_with_checksum == image_file.parent / 'sierpinski.8b75f4bc101858f0.jpg'
     metadata = all_metadata[FileMetadata]
     assert isinstance(metadata, FileMetadata)
     assert metadata.size == 127620
@@ -50,8 +49,8 @@ def test_checksum_of_greyscale_image_file():
     assert quantiles(metadata.fractal_dimension) == list(map(approx, [0.4932759, 0.50088119, 0.7010070]))
     assert quantiles(metadata.histogram) == [0, 0, 0]
     assert metadata.entropy == approx(4.1861197)
-    assert metadata.checksum == '8b75f4bc101858f0'
-    assert metadata.path_with_checksum == image_file.parent / 'sierpinski.8b75f4bc101858f0.jpg'
+    assert metadata.checksum == '94cc2cbc92ef3c0f'
+    assert metadata.path_with_checksum == image_file.parent / 'sierpinski.94cc2cbc92ef3c0f.jpg'
 
 
 def test_checksum_of_colour_image_file():
@@ -64,13 +63,11 @@ def test_checksum_of_colour_image_file():
     assert quantiles(metadata.histogram) == [5.0, 8.0, 15.0]
     assert quantiles(metadata.fractal_dimension) == list(map(approx, [0.99072488, 1.389666, 1.402276]))
     assert metadata.entropy == approx(1.278420)
-    assert metadata.checksum == '65ba3ca674200803'
-    assert metadata.path_with_checksum == image_file.parent / 'brazil.65ba3ca674200803.png'
     metadata = all_metadata[FileMetadata]
     assert isinstance(metadata, FileMetadata)
     assert metadata.size == 19845
     assert stdev(metadata.histogram) == approx(3309.278007)
     assert quantiles(metadata.fractal_dimension) == list(map(approx, [0.21160032, 1.9942328, 1.9943503]))
     assert metadata.entropy == approx(2.5157758)
-    assert metadata.checksum == '65ba3ca674200803'
-    assert metadata.path_with_checksum == image_file.parent / 'brazil.65ba3ca674200803.png'
+    assert metadata.checksum == '139f194152e9346c'
+    assert metadata.path_with_checksum == image_file.parent / 'brazil.139f194152e9346c.png'
