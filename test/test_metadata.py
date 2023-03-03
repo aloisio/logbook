@@ -7,7 +7,7 @@ from metadata import AudioFileMetadata, FileMetadataFactory
 
 
 def test_audio_file_metadata():
-    path = Path('/examples/audio.wav')
+    path = Path("/examples/audio.wav")
     duration = 13.33
     mock_audio_adapter = MagicMock()
     mock_audio_adapter.duration.return_value = duration
@@ -19,7 +19,7 @@ def test_audio_file_metadata():
 
 
 def test_audio_file_metadata_factory():
-    path = Path(__file__).parent / '100Hz_44100Hz_16bit_05sec.mp3'
+    path = Path(__file__).parent / "100Hz_44100Hz_16bit_05sec.mp3"
     audio_file_metadata = FileMetadataFactory().create_metadata(path)[AudioFileMetadata]
     assert isinstance(audio_file_metadata, AudioFileMetadata)
     assert audio_file_metadata.duration == approx(5.0, 0.01)

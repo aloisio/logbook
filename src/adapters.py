@@ -23,7 +23,6 @@ class Digest(Protocol):
 
 
 class ImageAdapter(Protocol):
-
     def to_grayscale(self, image: Image) -> Array:
         ...
 
@@ -58,7 +57,7 @@ class NullDigest(Digest):
         pass
 
     def hexdigest(self) -> str:
-        return 'bebacafe'
+        return "bebacafe"
 
 
 class DefaultImageAdapter(ImageAdapter):
@@ -69,7 +68,7 @@ class DefaultImageAdapter(ImageAdapter):
     def histogram(self, file_path: Path, digest: Digest = None) -> Image:
         digest = digest if digest is not None else NullDigest()
         hist = np.zeros((256, 256), dtype=np.uint8)
-        with file_path.open('rb') as f:
+        with file_path.open("rb") as f:
             while chunk := f.read(32 * 1024 * 1024):
                 digest.update(chunk)
                 np.frombuffer(chunk, dtype=np.uint8)
@@ -78,18 +77,22 @@ class DefaultImageAdapter(ImageAdapter):
                 y = data[1:]
                 np.add.at(hist, (x, y), 1)
 
-        hist = ((hist * 0xFFFFFF) // np.clip(hist.max(initial=0), a_min=1, a_max=None))
-        rgb_hist = Array([(hist >> 16) & 0xFF, (hist >> 8) & 0xFF, hist & 0xFF], dtype=np.uint8).transpose((1, 2, 0))
-        histogram_image = PIL.Image.fromarray(rgb_hist, 'RGB')
+        hist = (hist * 0xFFFFFF) // np.clip(hist.max(initial=0), a_min=1, a_max=None)
+        rgb_hist = Array(
+            [(hist >> 16) & 0xFF, (hist >> 8) & 0xFF, hist & 0xFF], dtype=np.uint8
+        ).transpose((1, 2, 0))
+        histogram_image = PIL.Image.fromarray(rgb_hist, "RGB")
         digest.update(self._to_bytes(histogram_image))
         entropy = histogram_image.entropy()
         self._last_entropy = entropy
-        digest.update(struct.pack('<f', entropy))
+        digest.update(struct.pack("<f", entropy))
         return histogram_image
 
     def thumbnail(self, path: Path) -> Image:
         with PIL.Image.open(path) as image:
-            thumbnail_image: PIL.Image = image.convert(mode='RGB').resize((256, 256), PIL.Image.BICUBIC)
+            thumbnail_image: PIL.Image = image.convert(mode="RGB").resize(
+                (256, 256), PIL.Image.BICUBIC
+            )
             self._last_entropy = image.entropy()
             self._last_size = image.size
         return thumbnail_image
@@ -107,7 +110,7 @@ class DefaultImageAdapter(ImageAdapter):
 
     def to_grayscale(self, image: Image) -> Array:
         # noinspection PyTypeChecker
-        return Array(image.convert('L'))
+        return Array(image.convert("L"))
 
     def rgb_histogram(self, image: Image) -> list[int]:
         return image.histogram()
@@ -134,7 +137,7 @@ class FileTypeAdapter(Protocol):
 
 class DefaultFileTypeAdapter(FileTypeAdapter):
     def is_image(self, path: Path) -> bool:
-        return (mime := magic.from_file(path, mime=True)) and mime.startswith('image')
+        return (mime := magic.from_file(path, mime=True)) and mime.startswith("image")
 
     def is_audio(self, path: Path) -> bool:
-        return (mime := magic.from_file(path, mime=True)) and mime.startswith('audio')
+        return (mime := magic.from_file(path, mime=True)) and mime.startswith("audio")

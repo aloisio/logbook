@@ -3,8 +3,16 @@ from hashlib import blake2b
 from pathlib import Path
 from typing import Protocol, Tuple, Type
 
-from adapters import (ImageAdapter, AudioAdapter, DefaultImageAdapter, DefaultAudioAdapter, FileTypeAdapter,
-                      DefaultFileTypeAdapter, Digest, NullDigest)
+from adapters import (
+    ImageAdapter,
+    AudioAdapter,
+    DefaultImageAdapter,
+    DefaultAudioAdapter,
+    FileTypeAdapter,
+    DefaultFileTypeAdapter,
+    Digest,
+    NullDigest,
+)
 
 
 # noinspection PyPropertyDefinition, PyRedeclaration
@@ -38,7 +46,9 @@ class FileMetadata(Metadata):
 
     @cached_property
     def path_with_checksum(self) -> Path:
-        return self.path.with_name(f'{self.path.stem}.{self.checksum}{self.path.suffix}')
+        return self.path.with_name(
+            f"{self.path.stem}.{self.checksum}{self.path.suffix}"
+        )
 
     @property
     def checksum(self) -> str:
@@ -49,7 +59,7 @@ class FileMetadata(Metadata):
         return self._image_adapter.fractal_dimension(self._byte_thumbnail)
 
     def _compute_metadata(self):
-        if hasattr(self, '_checksum'):
+        if hasattr(self, "_checksum"):
             return
         """
         Creates fields: _byte_entropy, _byte_histogram, _byte_size, _byte_thumbnail, _checksum
@@ -106,11 +116,23 @@ class AudioFileMetadata(Metadata):
 
 
 class FileMetadataFactory:
-    def __init__(self, digest:Digest = None, image_adapter: ImageAdapter = None, audio_adapter: AudioAdapter = None, file_type_adapter: FileTypeAdapter = None):
+    def __init__(
+        self,
+        digest: Digest = None,
+        image_adapter: ImageAdapter = None,
+        audio_adapter: AudioAdapter = None,
+        file_type_adapter: FileTypeAdapter = None,
+    ):
         self._digest = digest if digest is not None else blake2b(digest_size=8)
         self._image_adapter = image_adapter if image_adapter else DefaultImageAdapter()
-        self._audio_adapter = audio_adapter if audio_adapter is not None else DefaultAudioAdapter()
-        self._file_type_adapter = file_type_adapter if file_type_adapter is not None else DefaultFileTypeAdapter()
+        self._audio_adapter = (
+            audio_adapter if audio_adapter is not None else DefaultAudioAdapter()
+        )
+        self._file_type_adapter = (
+            file_type_adapter
+            if file_type_adapter is not None
+            else DefaultFileTypeAdapter()
+        )
 
     def create_metadata(self, path: Path) -> dict[Type[Metadata], Metadata]:
         file_metadata = FileMetadata(path, self._image_adapter, self._digest)

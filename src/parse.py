@@ -16,9 +16,9 @@ def validate(logbook: Logbook) -> int:
     for e in sorted(parse_result.errors):
         errors[e.path].append(e)
     for errs in errors.values():
-        print(f'[{errs[0].path.relative_to(logbook.root).as_posix()}]')
+        print(f"[{errs[0].path.relative_to(logbook.root).as_posix()}]")
         for e in errs:
-            print(f'> {e.message}')
+            print(f"> {e.message}")
             if e.hint:
                 print(e.hint)
     if not parse_result.valid:
@@ -26,8 +26,7 @@ def validate(logbook: Logbook) -> int:
     return 0
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument('directory', nargs='?', type=Path,
-                        default=Path.cwd())
+    parser.add_argument("directory", nargs="?", type=Path, default=Path.cwd())
     main(parser.parse_args())

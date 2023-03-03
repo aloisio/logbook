@@ -11,19 +11,21 @@ import numpy as np
 
 def fractal_dimension(Z, threshold=128):
     # Only for 2d image
-    assert (len(Z.shape) == 2)
+    assert len(Z.shape) == 2
 
     # From https://github.com/rougier/numpy-100 (#87)
     def boxcount(Z, k):
         S = np.add.reduceat(
             np.add.reduceat(Z, np.arange(0, Z.shape[0], k), axis=0),
-            np.arange(0, Z.shape[1], k), axis=1)
+            np.arange(0, Z.shape[1], k),
+            axis=1,
+        )
 
         # We count non-empty (0) and non-full boxes (k*k)
         return len(np.where((S > 0) & (S < k * k))[0])
 
     # Transform Z into a binary array
-    Z = (Z <= threshold)
+    Z = Z <= threshold
 
     # Minimal dimension of image
     p = min(Z.shape)

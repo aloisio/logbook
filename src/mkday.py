@@ -11,14 +11,16 @@ def main(args: argparse.Namespace):
     def adjust_markdown(new_day: Day):
         def rewrite_header_1(day: Day):
             if day:
-                lines = day.path.read_text(encoding='utf-8').splitlines()
+                lines = day.path.read_text(encoding="utf-8").splitlines()
                 lines[0] = day.headers[0].template
-                day.path.write_text(MarkdownParser.normalize_markdown('\n'.join(lines)),
-                                    encoding='utf-8')
+                day.path.write_text(
+                    MarkdownParser.normalize_markdown("\n".join(lines)),
+                    encoding="utf-8",
+                )
 
-        rewrite_header_1(new_day.previous.get('', None))
+        rewrite_header_1(new_day.previous.get("", None))
         rewrite_header_1(new_day)
-        rewrite_header_1(new_day.next.get('', None))
+        rewrite_header_1(new_day.next.get("", None))
 
     old_logbook = Logbook(args.directory)
     validate(old_logbook)
@@ -41,19 +43,19 @@ def validate(logbook: Logbook):
     for e in sorted(parse_result.errors):
         errors[e.path].append(e)
     for errs in errors.values():
-        print(f'[{errs[0].path.relative_to(logbook.root).as_posix()}]')
+        print(f"[{errs[0].path.relative_to(logbook.root).as_posix()}]")
         for e in errs:
-            print(f'> {e.message}')
+            print(f"> {e.message}")
             if e.hint:
                 print(e.hint)
     if not parse_result.valid:
         sys.exit(1)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument('directory', nargs='?', type=Path,
-                        default=Path.cwd())
-    parser.add_argument('-d', '--date', type=datetime.date.fromisoformat,
-                        default=datetime.date.today())
+    parser.add_argument("directory", nargs="?", type=Path, default=Path.cwd())
+    parser.add_argument(
+        "-d", "--date", type=datetime.date.fromisoformat, default=datetime.date.today()
+    )
     main(parser.parse_args())
