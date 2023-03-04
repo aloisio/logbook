@@ -3,6 +3,7 @@ import sys
 from argparse import ArgumentParser
 from itertools import filterfalse
 from pathlib import Path
+from typing import cast
 
 from metadata import FileMetadataFactory, FileMetadata
 
@@ -30,7 +31,9 @@ def main(write: bool, *patterns: str):
     )
     failures = []
     for path in sorted(set(files).union(set(glob_files))):
-        checksum = FileMetadataFactory().create_metadata(path)[FileMetadata].checksum
+        checksum = cast(
+            FileMetadataFactory().create_metadata(path)[FileMetadata], FileMetadata
+        ).checksum
         match = CHKSUM_PATTERN.match(path.stem)
         original_checksum = match.group("checksum") if match else None
         if match and original_checksum == checksum:
