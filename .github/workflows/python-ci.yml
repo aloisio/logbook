@@ -19,6 +19,9 @@ jobs:
           sudo chown -R $USER:$USER /var/cache/apt/archives
           sudo chmod -R 777 /var/cache/apt/archives  
 
+      - name: List cache directory
+        run: ls -la /var/cache/apt/archives
+
       - name: Cache dependencies
         uses: actions/cache@v3
         with:
