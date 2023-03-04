@@ -121,10 +121,17 @@ class AudioFileMetadata(Metadata):
         return self._audio_adapter.entropy(self._path)
 
 
-class CompositeMetadata(TypedDict, total=False):
+class MetadataAggregate(TypedDict, total=False):
     FileMetadata: FileMetadata
     ImageFileMetadata: ImageFileMetadata
     AudioFileMetadata: AudioFileMetadata
+
+
+class CompositeMetadata(Metadata):
+    def __init__(self, metadata_aggregate: MetadataAggregate):
+        super().__init__()
+        for key, value in metadata_aggregate.items():
+            setattr(self, key, value)
 
 
 class FileMetadataFactory:
@@ -146,17 +153,17 @@ class FileMetadataFactory:
             else DefaultFileTypeAdapter()
         )
 
-    def create_metadata(self, path: Path) -> CompositeMetadata:
-        metadata = {}
-        metadata.update(
+    def create_metadata(self, path: Path) -> Metadata:
+        aggregate = MetadataAggregate()
+        aggregate.update(
             FileMetadata=FileMetadata(path, self._image_adapter, self._digest)
         )
         if self._file_type_adapter.is_image(path):
-            metadata.update(
+            aggregate.update(
                 ImageFileMetadata=ImageFileMetadata(path, self._image_adapter)
             )
         if self._file_type_adapter.is_audio(path):
-            metadata.update(
+            aggregate.update(
                 AudioFileMetadata=AudioFileMetadata(path, self._audio_adapter)
             )
-        return metadata
+        return CompositeMetadata(aggregate)
