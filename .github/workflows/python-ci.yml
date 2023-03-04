@@ -35,6 +35,9 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-apt-
 
+      - name: List cached apt-get packages
+        run: ls -la /var/cache/apt/archives
+
       - name: Checkout code
         uses: actions/checkout@v3
 
