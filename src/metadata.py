@@ -142,11 +142,11 @@ class MetadataAggregate(TypedDict, total=False):
 
 class FileMetadataFactory:
     def __init__(
-            self,
-            digest: Digest = None,
-            image_adapter: ImageAdapter = None,
-            audio_adapter: AudioAdapter = None,
-            file_type_adapter: FileTypeAdapter = None,
+        self,
+        digest: Digest = None,
+        image_adapter: ImageAdapter = None,
+        audio_adapter: AudioAdapter = None,
+        file_type_adapter: FileTypeAdapter = None,
     ):
         self._digest = digest if digest is not None else blake2b(digest_size=8)
         self._image_adapter = image_adapter if image_adapter else DefaultImageAdapter()
