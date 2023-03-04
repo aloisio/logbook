@@ -114,6 +114,10 @@ class AudioFileMetadata(Metadata):
     def duration(self) -> float:
         return self._audio_adapter.duration(self._path)
 
+    @property
+    def entropy(self) -> float:
+        return self._audio_adapter.entropy(self._path)
+
 
 class FileMetadataFactory:
     def __init__(
