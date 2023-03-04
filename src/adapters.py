@@ -51,6 +51,9 @@ class AudioAdapter(Protocol):
     def duration(self, path: Path) -> float:
         ...
 
+    def entropy(self, path: Path) -> float:
+        ...
+
 
 class NullDigest(Digest):
     def update(self, data: bytes) -> None:
@@ -125,6 +128,14 @@ class DefaultAudioAdapter(AudioAdapter):
     def duration(self, path: Path) -> float:
         y, sr = librosa.load(path.as_posix())
         return librosa.get_duration(y=y, sr=sr)
+
+    # noinspection PyPep8Naming
+    def entropy(self, path: Path) -> float:
+        y, sr = librosa.load(str(path))
+        S = np.abs(librosa.stft(y))
+        norm_S = librosa.util.normalize(S, norm=1, axis=0)
+        entropy = -np.sum(norm_S * np.log2(norm_S), axis=0)
+        return float(np.mean(entropy))
 
 
 class FileTypeAdapter(Protocol):

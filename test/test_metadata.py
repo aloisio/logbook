@@ -27,4 +27,4 @@ def test_audio_file_metadata_factory():
     audio_file_metadata = FileMetadataFactory().create_metadata(path)[AudioFileMetadata]
     assert isinstance(audio_file_metadata, AudioFileMetadata)
     assert audio_file_metadata.duration == approx(5.0, 0.01)
-    # assert audio_file_metadata.entropy == approx(0.8)
+    assert audio_file_metadata.entropy == approx(1.9632341)
