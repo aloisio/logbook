@@ -31,9 +31,7 @@ def main(write: bool, *patterns: str):
     )
     failures = []
     for path in sorted(set(files).union(set(glob_files))):
-        checksum = cast(
-            FileMetadataFactory().create_metadata(path)[FileMetadata], FileMetadata
-        ).checksum
+        checksum = FileMetadataFactory().create_metadata(path)["FileMetadata"].checksum
         match = CHKSUM_PATTERN.match(path.stem)
         original_checksum = match.group("checksum") if match else None
         if match and original_checksum == checksum:

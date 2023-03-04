@@ -1,7 +1,7 @@
 from functools import cached_property
 from hashlib import blake2b
 from pathlib import Path
-from typing import Protocol, Tuple, Type
+from typing import Protocol, Tuple, TypedDict
 
 from adapters import (
     ImageAdapter,
@@ -22,6 +22,8 @@ class Metadata(Protocol):
 
 # noinspection PyAttributeOutsideInit
 class FileMetadata(Metadata):
+    NAME = "FileMetadata"
+
     def __init__(self, path, image_adapter: ImageAdapter, digest: Digest = None):
         self._image_adapter = image_adapter
         self._path = path
@@ -119,6 +121,12 @@ class AudioFileMetadata(Metadata):
         return self._audio_adapter.entropy(self._path)
 
 
+class CompositeMetadata(TypedDict, total=False):
+    FileMetadata: FileMetadata
+    ImageFileMetadata: ImageFileMetadata
+    AudioFileMetadata: AudioFileMetadata
+
+
 class FileMetadataFactory:
     def __init__(
         self,
@@ -138,12 +146,17 @@ class FileMetadataFactory:
             else DefaultFileTypeAdapter()
         )
 
-    def create_metadata(self, path: Path) -> dict[Type[Metadata], Metadata]:
-        file_metadata = FileMetadata(path, self._image_adapter, self._digest)
-        metadata = {FileMetadata: file_metadata}
+    def create_metadata(self, path: Path) -> CompositeMetadata:
+        metadata = {}
+        metadata.update(
+            FileMetadata=FileMetadata(path, self._image_adapter, self._digest)
+        )
         if self._file_type_adapter.is_image(path):
-            image_file_metadata = ImageFileMetadata(path, self._image_adapter)
-            metadata[ImageFileMetadata] = image_file_metadata
+            metadata.update(
+                ImageFileMetadata=ImageFileMetadata(path, self._image_adapter)
+            )
         if self._file_type_adapter.is_audio(path):
-            metadata[AudioFileMetadata] = AudioFileMetadata(path, self._audio_adapter)
+            metadata.update(
+                AudioFileMetadata=AudioFileMetadata(path, self._audio_adapter)
+            )
         return metadata
