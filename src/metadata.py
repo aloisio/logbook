@@ -1,7 +1,7 @@
 from functools import cached_property
 from hashlib import blake2b
 from pathlib import Path
-from typing import Protocol, Tuple, TypedDict
+from typing import Protocol, Tuple, TypedDict, Type, TypeVar
 
 from adapters import (
     ImageAdapter,
@@ -121,26 +121,32 @@ class AudioFileMetadata(Metadata):
         return self._audio_adapter.entropy(self._path)
 
 
+T = TypeVar("T", bound=Metadata)
+
+
+class CompositeMetadata(Metadata):
+    def __init__(self, metadata_aggregate: "MetadataAggregate"):
+        super().__init__()
+        self._aggregate = {type(v): v for k, v in metadata_aggregate.items()}
+
+    def metadata(self, cls: Type[T]) -> T:
+        return self._aggregate[cls]
+
+
 class MetadataAggregate(TypedDict, total=False):
     FileMetadata: FileMetadata
     ImageFileMetadata: ImageFileMetadata
     AudioFileMetadata: AudioFileMetadata
-
-
-class CompositeMetadata(Metadata):
-    def __init__(self, metadata_aggregate: MetadataAggregate):
-        super().__init__()
-        for key, value in metadata_aggregate.items():
-            setattr(self, key, value)
+    CompositeMetadata: CompositeMetadata
 
 
 class FileMetadataFactory:
     def __init__(
-        self,
-        digest: Digest = None,
-        image_adapter: ImageAdapter = None,
-        audio_adapter: AudioAdapter = None,
-        file_type_adapter: FileTypeAdapter = None,
+            self,
+            digest: Digest = None,
+            image_adapter: ImageAdapter = None,
+            audio_adapter: AudioAdapter = None,
+            file_type_adapter: FileTypeAdapter = None,
     ):
         self._digest = digest if digest is not None else blake2b(digest_size=8)
         self._image_adapter = image_adapter if image_adapter else DefaultImageAdapter()
@@ -153,7 +159,7 @@ class FileMetadataFactory:
             else DefaultFileTypeAdapter()
         )
 
-    def create_metadata(self, path: Path) -> Metadata:
+    def create_metadata(self, path: Path) -> CompositeMetadata:
         aggregate = MetadataAggregate()
         aggregate.update(
             FileMetadata=FileMetadata(path, self._image_adapter, self._digest)

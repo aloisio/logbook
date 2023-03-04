@@ -1,9 +1,13 @@
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 import pytest
 
-from metadata import FileMetadata, ImageFileMetadata, FileMetadataFactory
+from metadata import (
+    FileMetadata,
+    ImageFileMetadata,
+    FileMetadataFactory,
+)
 
 FIXTURES = Path(__file__).parent
 
@@ -24,7 +28,7 @@ def file_factory():
 
 def test_file_metadata_creation(sample_file, file_factory):
     """Test the creation of FileMetadata object using the factory"""
-    metadata = file_factory.create_metadata(sample_file).FileMetadata
+    metadata = file_factory.create_metadata(sample_file).metadata(FileMetadata)
     assert isinstance(metadata, FileMetadata)
     assert metadata.path == sample_file
     assert metadata.size == 11
@@ -38,7 +42,7 @@ def test_create_file_metadata():
     factory = FileMetadataFactory(
         image_adapter=mock_image_adapter, file_type_adapter=mock_file_type_adapter
     )
-    metadata = factory.create_metadata(file_path).ImageFileMetadata
+    metadata = factory.create_metadata(file_path).metadata(ImageFileMetadata)
     assert isinstance(metadata, ImageFileMetadata)
     assert metadata.path == file_path
     assert metadata._image_adapter == mock_image_adapter

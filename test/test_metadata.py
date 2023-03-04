@@ -31,7 +31,9 @@ def test_audio_file_metadata():
 
 def test_audio_file_metadata_factory():
     path = Path(__file__).parent / "100Hz_44100Hz_16bit_05sec.mp3"
-    audio_file_metadata = FileMetadataFactory().create_metadata(path).AudioFileMetadata
+    audio_file_metadata = (
+        FileMetadataFactory().create_metadata(path).metadata(AudioFileMetadata)
+    )
     assert isinstance(audio_file_metadata, AudioFileMetadata)
     assert audio_file_metadata.duration == approx(5.0, 0.01)
     assert audio_file_metadata.entropy == approx(1.9632, 0.0001)
@@ -68,4 +70,4 @@ def test_composite_metadata():
             FileMetadata=mock_file_metadata, AudioFileMetadata=mock_audio_file_metadata
         )
     )
-    assert type(metadata.FileMetadata) == FileMetadata
+    assert type(metadata.metadata(FileMetadata)) == FileMetadata
