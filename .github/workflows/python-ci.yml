@@ -17,7 +17,7 @@ jobs:
             sudo mkdir -p /var/cache/apt/archives
           fi
           sudo chown -R $USER:$USER /var/cache/apt/archives
-          sudo chmod -R 777 /var/cache/apt/archives  
+          sudo chmod -R 777 /var/cache/apt/archives
 
       - name: Cache dependencies
         uses: actions/cache@v3
@@ -27,13 +27,13 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-pip-
 
-      - name: Cache apt-get packages
+      - name: Cache venv
         uses: actions/cache@v3
         with:
-          path: /var/cache/apt/archives
-          key: ${{ runner.os }}-apt-${{ hashFiles('**/requirements.txt') }}
+          path: ~/.venv
+          key: ${{ runner.os }}-venv-${{ hashFiles('**/requirements.txt') }}
           restore-keys: |
-            ${{ runner.os }}-apt-
+            ${{ runner.os }}-venv-
 
       - name: List cached apt-get packages
         run: ls -la /var/cache/apt/archives
@@ -41,20 +41,14 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v3
 
-      - name: Set up Python 3.9
-        uses: actions/setup-python@v3
-        with:
-          python-version: 3.9
+      - name: Set up Docker environment
+        uses: docker/setup-buildx-action@v3
 
-      - name: Install dependencies
-        run: |
-          sudo apt-get install -y libsndfile1 ffmpeg
-          python -m venv .venv
-          source .venv/bin/activate
-          pip install -r requirements.txt
+      - name: Build Docker image
+        run: docker build --tag myapp .
 
       - name: Run tests
         run: |
-          export PYTHONPATH=${{github.workspace}}/src:${{github.workspace}}/test
-          source .venv/bin/activate
-          pytest
+          docker run -it --rm -v $PWD:/app myapp pytest
+        env:
+          PYTHONPATH: /app/src:/app/test
