@@ -3,14 +3,19 @@ from unittest.mock import MagicMock
 
 from pytest import approx
 
-from adapters import AudioAdapter, ImageAdapter, Digest
+from adapters import AudioAdapter, ImageAdapter, Digest, VideoAdapter
 from metadata import (
     AudioFileMetadata,
     FileMetadataFactory,
     FileMetadata,
     MetadataAggregate,
     CompositeMetadata,
+    VideoFileMetadata,
 )
+
+FIXTURES = Path(__file__).parent / "fixtures"
+AUDIO_FILE = FIXTURES / "100Hz_44100Hz_16bit_05sec.mp3"
+VIDEO_FILE = FIXTURES / "valid.mp4"
 
 
 def test_audio_file_metadata():
@@ -30,7 +35,7 @@ def test_audio_file_metadata():
 
 
 def test_audio_file_metadata_factory():
-    path = Path(__file__).parent / "100Hz_44100Hz_16bit_05sec.mp3"
+    path = AUDIO_FILE
     audio_file_metadata = (
         FileMetadataFactory().create_metadata(path).metadata(AudioFileMetadata)
     )
@@ -40,7 +45,7 @@ def test_audio_file_metadata_factory():
 
 
 def test_metadata_aggregate():
-    path = Path(__file__).parent / "100Hz_44100Hz_16bit_05sec.mp3"
+    path = AUDIO_FILE
     file_metadata = FileMetadata(
         path, MagicMock(spec=ImageAdapter), MagicMock(spec=Digest)
     )
@@ -65,8 +70,6 @@ def test_metadata_aggregate():
 def test_composite_metadata():
     mock_file_metadata = FileMetadata(MagicMock(), MagicMock(), MagicMock())
     mock_audio_file_metadata = AudioFileMetadata(MagicMock(), MagicMock())
-    type(mock_file_metadata).return_value = FileMetadata
-    type(mock_audio_file_metadata).return_value = AudioFileMetadata
     metadata = CompositeMetadata(
         MetadataAggregate(
             FileMetadata=mock_file_metadata, AudioFileMetadata=mock_audio_file_metadata
@@ -76,3 +79,21 @@ def test_composite_metadata():
     assert metadata.metadata(FileMetadata) == mock_file_metadata
     assert metadata.metadata(AudioFileMetadata) == mock_audio_file_metadata
     assert list(metadata.children) == [mock_file_metadata, mock_audio_file_metadata]
+
+
+def test_video_file_metadata():
+    mock_video_adapter = MagicMock(spec=VideoAdapter)
+    mock_video_adapter.metrics.return_value = VideoAdapter.Metrics(
+        duration=4.0, frame_rate=30
+    )
+    metadata = VideoFileMetadata(MagicMock(spec=Path), mock_video_adapter)
+    assert metadata.duration == approx(4.0)
+    assert metadata.frame_rate == approx(30)
+
+
+def test_video_file_metadata_factory():
+    metadata = (
+        FileMetadataFactory().create_metadata(VIDEO_FILE).metadata(VideoFileMetadata)
+    )
+    assert metadata.duration == approx(4.96666, 0.00001)
+    assert metadata.frame_rate == approx(30)

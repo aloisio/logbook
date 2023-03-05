@@ -9,7 +9,7 @@ from metadata import (
     FileMetadataFactory,
 )
 
-FIXTURES = Path(__file__).parent
+FIXTURES = Path(__file__).parent / "fixtures"
 
 
 @pytest.fixture

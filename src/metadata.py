@@ -11,6 +11,8 @@ from adapters import (
     FileTypeAdapter,
     DefaultFileTypeAdapter,
     Digest,
+    VideoAdapter,
+    DefaultVideoAdapter,
 )
 
 
@@ -120,6 +122,21 @@ class AudioFileMetadata(Metadata):
         return self._audio_adapter.entropy(self._path)
 
 
+class VideoFileMetadata(Metadata):
+    def __init__(self, path: Path, video_adapter: VideoAdapter):
+        self._path = path
+        self._video_adapter = video_adapter
+        self._metrics = video_adapter.metrics(path)
+
+    @property
+    def duration(self) -> float:
+        return self._metrics["duration"]
+
+    @property
+    def frame_rate(self) -> float:
+        return self._metrics["frame_rate"]
+
+
 T = TypeVar("T", bound=Metadata)
 
 
@@ -140,6 +157,7 @@ class MetadataAggregate(TypedDict, total=False):
     FileMetadata: FileMetadata
     ImageFileMetadata: ImageFileMetadata
     AudioFileMetadata: AudioFileMetadata
+    VideoFileMetadata: VideoFileMetadata
     CompositeMetadata: CompositeMetadata
 
 
@@ -154,6 +172,7 @@ class FileMetadataFactory:
         self._digest = kwargs.get("digest", blake2b(digest_size=8))
         self._image_adapter = kwargs.get("image_adapter", DefaultImageAdapter())
         self._audio_adapter = kwargs.get("audio_adapter", DefaultAudioAdapter())
+        self._video_adapter = kwargs.get("video_adapter", DefaultVideoAdapter())
         self._file_type_adapter = kwargs.get(
             "file_type_adapter", DefaultFileTypeAdapter()
         )
@@ -170,5 +189,9 @@ class FileMetadataFactory:
         if self._file_type_adapter.is_audio(path):
             aggregate.update(
                 AudioFileMetadata=AudioFileMetadata(path, self._audio_adapter)
+            )
+        if self._file_type_adapter.is_video(path):
+            aggregate.update(
+                VideoFileMetadata=VideoFileMetadata(path, self._video_adapter)
             )
         return CompositeMetadata(aggregate)

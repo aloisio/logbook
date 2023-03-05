@@ -1,4 +1,9 @@
 from pathlib import Path
+
+FIXTURES = Path(__file__).parent / "fixtures"
+GRAYSCALE_IMAGE = FIXTURES / "sierpinski.jpg"
+COLOUR_IMAGE = FIXTURES / "brazil.png"
+
 from statistics import quantiles, stdev
 
 from pytest import approx
@@ -38,7 +43,7 @@ def test_checksum_of_text_file(tmp_path):
 
 
 def test_checksum_of_greyscale_image_file():
-    image_file = Path(__file__).parent / "sierpinski.jpg"
+    image_file = GRAYSCALE_IMAGE
     factory = FileMetadataFactory()
     all_metadata: CompositeMetadata = factory.create_metadata(image_file)
     metadata = all_metadata.metadata(ImageFileMetadata)
@@ -68,7 +73,7 @@ def test_checksum_of_greyscale_image_file():
 
 
 def test_checksum_of_colour_image_file():
-    image_file = Path(__file__).parent / "brazil.png"
+    image_file = COLOUR_IMAGE
     factory = FileMetadataFactory()
     all_metadata = factory.create_metadata(image_file)
     metadata = all_metadata.metadata(ImageFileMetadata)

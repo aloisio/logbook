@@ -1,8 +1,9 @@
 import struct
 from pathlib import Path
-from typing import Protocol, Optional
+from typing import Protocol, Optional, TypedDict
 
 import PIL.Image
+import ffmpeg
 import librosa
 import magic
 import numpy as np
@@ -145,6 +146,9 @@ class FileTypeAdapter(Protocol):
     def is_audio(self, path: Path) -> bool:
         ...
 
+    def is_video(self, path: Path) -> bool:
+        ...
+
 
 class DefaultFileTypeAdapter(FileTypeAdapter):
     def is_image(self, path: Path) -> bool:
@@ -152,3 +156,24 @@ class DefaultFileTypeAdapter(FileTypeAdapter):
 
     def is_audio(self, path: Path) -> bool:
         return (mime := magic.from_file(path, mime=True)) and mime.startswith("audio")
+
+    def is_video(self, path: Path) -> bool:
+        return (mime := magic.from_file(path, mime=True)) and mime.startswith("video")
+
+
+class VideoAdapter(Protocol):
+    class Metrics(TypedDict):
+        duration: float
+        frame_rate: float
+
+    def metrics(self, path: Path) -> Metrics:
+        ...
+
+
+class DefaultVideoAdapter(VideoAdapter):
+    def metrics(self, path: Path) -> VideoAdapter.Metrics:
+        stream = ffmpeg.probe(str(path))
+        video_info = [v for v in stream["streams"] if v["codec_type"] == "video"][0]
+        duration = float(video_info["duration"])
+        frame_rate = float(eval(video_info["avg_frame_rate"]))
+        return VideoAdapter.Metrics(duration=duration, frame_rate=frame_rate)
