@@ -21,7 +21,8 @@ from adapters import (
 def test_default_audio_adapter():
     adapter: AudioAdapter = DefaultAudioAdapter()
     audio_file = AUDIO_FILE
-    assert adapter.duration(audio_file) == approx(5.0, 0.01)
+    assert adapter.metrics(audio_file)["duration"] == approx(5.0, 0.01)
+    assert adapter.metrics(audio_file)["entropy"] == approx(1.96, 0.01)
 
 
 def test_default_file_type_adapter_image():

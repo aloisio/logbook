@@ -23,15 +23,15 @@ def test_audio_file_metadata():
     duration = 13.33
     entropy = 0.87
     mock_audio_adapter = MagicMock()
-    mock_audio_adapter.duration.return_value = duration
-    mock_audio_adapter.entropy.return_value = entropy
+    mock_audio_adapter.metrics.return_value = AudioAdapter.Metrics(
+        duration=duration, entropy=entropy
+    )
 
     audio_file_metadata = AudioFileMetadata(path, mock_audio_adapter)
 
     assert audio_file_metadata.duration == duration
     assert audio_file_metadata.entropy == 0.87
-    mock_audio_adapter.duration.assert_called_once_with(path)
-    mock_audio_adapter.entropy.assert_called_once_with(path)
+    mock_audio_adapter.metrics.assert_called_once_with(path)
 
 
 def test_audio_file_metadata_factory():
@@ -54,7 +54,7 @@ def test_metadata_aggregate():
     assert metadata["FileMetadata"] == file_metadata
     assert "AudioFileMetadata" not in metadata
     mock_audio_adapter = MagicMock(autospec=AudioAdapter)
-    mock_audio_adapter.duration.return_value = 5
+    mock_audio_adapter.metrics.return_value = AudioAdapter.Metrics(duration=5)
     audio_file_metadata = AudioFileMetadata(path, mock_audio_adapter)
     metadata = MetadataAggregate(
         FileMetadata=file_metadata, AudioFileMetadata=audio_file_metadata

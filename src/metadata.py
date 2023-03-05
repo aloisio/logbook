@@ -115,18 +115,21 @@ class AudioFileMetadata(Metadata):
 
     @property
     def duration(self) -> float:
-        return self._audio_adapter.duration(self._path)
+        return self._metrics["duration"]
 
     @property
     def entropy(self) -> float:
-        return self._audio_adapter.entropy(self._path)
+        return self._metrics["entropy"]
+
+    @cached_property
+    def _metrics(self):
+        return self._audio_adapter.metrics(self._path)
 
 
 class VideoFileMetadata(Metadata):
     def __init__(self, path: Path, video_adapter: VideoAdapter):
         self._path = path
         self._video_adapter = video_adapter
-        self._metrics = video_adapter.metrics(path)
 
     @property
     def duration(self) -> float:
@@ -143,6 +146,10 @@ class VideoFileMetadata(Metadata):
     @property
     def height(self) -> int:
         return self._metrics["height"]
+
+    @cached_property
+    def _metrics(self):
+        return self._video_adapter.metrics(self._path)
 
 
 T = TypeVar("T", bound=Metadata)
