@@ -1,7 +1,7 @@
 from functools import cached_property
 from hashlib import blake2b
 from pathlib import Path
-from typing import Protocol, Tuple, TypedDict, Type, TypeVar
+from typing import Optional, Protocol, Tuple, Type, TypeVar, TypedDict
 
 from adapters import (
     ImageAdapter,
@@ -141,22 +141,18 @@ class MetadataAggregate(TypedDict, total=False):
 
 
 class FileMetadataFactory:
-    def __init__(
-        self,
-        digest: Digest = None,
-        image_adapter: ImageAdapter = None,
-        audio_adapter: AudioAdapter = None,
-        file_type_adapter: FileTypeAdapter = None,
-    ):
-        self._digest = digest if digest is not None else blake2b(digest_size=8)
-        self._image_adapter = image_adapter if image_adapter else DefaultImageAdapter()
-        self._audio_adapter = (
-            audio_adapter if audio_adapter is not None else DefaultAudioAdapter()
-        )
-        self._file_type_adapter = (
-            file_type_adapter
-            if file_type_adapter is not None
-            else DefaultFileTypeAdapter()
+    class FileMetadataFactoryArgs(TypedDict, total=False):
+        digest: Optional[Digest]
+        image_adapter: Optional[ImageAdapter]
+        audio_adapter: Optional[AudioAdapter]
+        file_type_adapter: Optional[FileTypeAdapter]
+
+    def __init__(self, **kwargs: FileMetadataFactoryArgs):
+        self._digest = kwargs.get("digest", blake2b(digest_size=8))
+        self._image_adapter = kwargs.get("image_adapter", DefaultImageAdapter())
+        self._audio_adapter = kwargs.get("audio_adapter", DefaultAudioAdapter())
+        self._file_type_adapter = kwargs.get(
+            "file_type_adapter", DefaultFileTypeAdapter()
         )
 
     def create_metadata(self, path: Path) -> CompositeMetadata:
