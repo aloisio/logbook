@@ -1,14 +1,14 @@
 from pathlib import Path
 from unittest.mock import MagicMock
 
+import pytest
 from pytest import approx
 
-from adapters import AudioAdapter, ImageAdapter, Digest, VideoAdapter
+from adapters import AudioAdapter, VideoAdapter
 from metadata import (
     AudioFileMetadata,
     FileMetadataFactory,
     FileMetadata,
-    MetadataAggregate,
     CompositeMetadata,
     VideoFileMetadata,
 )
@@ -44,37 +44,14 @@ def test_audio_file_metadata_factory():
     assert audio_file_metadata.entropy == approx(1.9632, 0.0001)
 
 
-def test_metadata_aggregate():
-    path = AUDIO_FILE
-    file_metadata = FileMetadata(
-        path, MagicMock(spec=ImageAdapter), MagicMock(spec=Digest)
-    )
-    metadata = MetadataAggregate(FileMetadata=file_metadata)
-    assert type(metadata["FileMetadata"]) == FileMetadata
-    assert metadata["FileMetadata"] == file_metadata
-    assert "AudioFileMetadata" not in metadata
-    mock_audio_adapter = MagicMock(autospec=AudioAdapter)
-    mock_audio_adapter.metrics.return_value = AudioAdapter.Metrics(duration=5)
-    audio_file_metadata = AudioFileMetadata(path, mock_audio_adapter)
-    metadata = MetadataAggregate(
-        FileMetadata=file_metadata, AudioFileMetadata=audio_file_metadata
-    )
-    assert metadata["FileMetadata"].size == 80666
-    assert type(metadata["FileMetadata"]) == FileMetadata
-    assert metadata["FileMetadata"] == file_metadata
-    assert type(metadata["AudioFileMetadata"]) == AudioFileMetadata
-    assert metadata["AudioFileMetadata"] == audio_file_metadata
-    assert metadata["AudioFileMetadata"].duration == 5
-
-
 def test_composite_metadata():
     mock_file_metadata = FileMetadata(MagicMock(), MagicMock(), MagicMock())
     mock_audio_file_metadata = AudioFileMetadata(MagicMock(), MagicMock())
-    metadata = CompositeMetadata(
-        MetadataAggregate(
-            FileMetadata=mock_file_metadata, AudioFileMetadata=mock_audio_file_metadata
-        )
-    )
+    metadata = CompositeMetadata(mock_file_metadata)
+    metadata.add(mock_audio_file_metadata)
+    with pytest.raises(TypeError):
+        # noinspection PyTypeChecker
+        metadata.add("33")
     assert type(metadata.metadata(FileMetadata)) == FileMetadata
     assert metadata.metadata(FileMetadata) == mock_file_metadata
     assert metadata.metadata(AudioFileMetadata) == mock_audio_file_metadata

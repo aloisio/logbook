@@ -1,7 +1,15 @@
+from abc import ABC
 from functools import cached_property
 from hashlib import blake2b
 from pathlib import Path
-from typing import Optional, Protocol, Tuple, Type, TypeVar, TypedDict, Iterable
+from typing import (
+    Optional,
+    Tuple,
+    Type,
+    TypeVar,
+    TypedDict,
+    Iterable,
+)
 
 from adapters import (
     ImageAdapter,
@@ -17,7 +25,7 @@ from adapters import (
 
 
 # noinspection PyPropertyDefinition, PyRedeclaration
-class Metadata(Protocol):
+class Metadata(ABC):
     ...
 
 
@@ -156,9 +164,14 @@ T = TypeVar("T", bound=Metadata)
 
 
 class CompositeMetadata(Metadata):
-    def __init__(self, metadata_aggregate: "MetadataAggregate"):
+    def __init__(self, *metadata: T):
         super().__init__()
-        self._aggregate = {type(v): v for k, v in metadata_aggregate.items()}
+        self._aggregate = {type(m): m for m in metadata}
+
+    def add(self, metadata: T):
+        if not isinstance(metadata, Metadata):
+            raise TypeError(f"Parameter must be instance of {Metadata}")
+        self._aggregate.update({type(metadata): metadata})
 
     def metadata(self, cls: Type[T]) -> T:
         return self._aggregate[cls]
@@ -166,14 +179,6 @@ class CompositeMetadata(Metadata):
     @property
     def children(self) -> Iterable[Metadata]:
         return self._aggregate.values()
-
-
-class MetadataAggregate(TypedDict, total=False):
-    FileMetadata: FileMetadata
-    ImageFileMetadata: ImageFileMetadata
-    AudioFileMetadata: AudioFileMetadata
-    VideoFileMetadata: VideoFileMetadata
-    CompositeMetadata: CompositeMetadata
 
 
 class FileMetadataFactory:
@@ -194,20 +199,12 @@ class FileMetadataFactory:
         self._video_adapter = kwargs.get("video_adapter", DefaultVideoAdapter())
 
     def create_metadata(self, path: Path) -> CompositeMetadata:
-        aggregate = MetadataAggregate()
-        aggregate.update(
-            FileMetadata=FileMetadata(path, self._image_adapter, self._digest)
-        )
+        metadata = CompositeMetadata()
+        metadata.add(FileMetadata(path, self._image_adapter, self._digest))
         if self._file_type_adapter.is_image(path):
-            aggregate.update(
-                ImageFileMetadata=ImageFileMetadata(path, self._image_adapter)
-            )
+            metadata.add(ImageFileMetadata(path, self._image_adapter))
         if self._file_type_adapter.is_audio(path):
-            aggregate.update(
-                AudioFileMetadata=AudioFileMetadata(path, self._audio_adapter)
-            )
+            metadata.add(AudioFileMetadata(path, self._audio_adapter))
         if self._file_type_adapter.is_video(path):
-            aggregate.update(
-                VideoFileMetadata=VideoFileMetadata(path, self._video_adapter)
-            )
-        return CompositeMetadata(aggregate)
+            metadata.add(VideoFileMetadata(path, self._video_adapter))
+        return metadata

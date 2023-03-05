@@ -191,7 +191,7 @@ class DefaultAudioAdapter(AudioAdapter):
 class DefaultVideoAdapter(VideoAdapter):
     def metrics(self, path: Path) -> VideoAdapter.Metrics:
         stream = ffmpeg.probe(str(path))
-        video_stream = [v for v in stream["streams"] if v["codec_type"] == "video"][0]
+        video_stream = [s for s in stream["streams"] if s["codec_type"] == "video"][0]
         duration = float(video_stream["duration"])
         frame_rate = float(Fraction(video_stream["avg_frame_rate"]))
         width = int(video_stream["width"])
