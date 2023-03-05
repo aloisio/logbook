@@ -16,6 +16,17 @@ Image = PIL.Image.Image
 Array = np.array
 
 
+class FileTypeAdapter(Protocol):
+    def is_image(self, path: Path) -> bool:
+        ...
+
+    def is_audio(self, path: Path) -> bool:
+        ...
+
+    def is_video(self, path: Path) -> bool:
+        ...
+
+
 class Digest(Protocol):
     def update(self, data: bytes) -> None:
         ...
@@ -62,6 +73,34 @@ class AudioAdapter(Protocol):
 
     def entropy(self, path: Path) -> float:
         ...
+
+
+class VideoAdapter(Protocol):
+    class Metrics(TypedDict, total=False):
+        duration: float
+        frame_rate: float
+        width: int
+        height: int
+
+    def metrics(self, path: Path) -> Metrics:
+        ...
+
+
+class DefaultFileTypeAdapter(FileTypeAdapter):
+    def is_image(self, path: Path) -> bool:
+        return self._is_in_category(path, "image")
+
+    def is_audio(self, path: Path) -> bool:
+        return self._is_in_category(path, "audio")
+
+    def is_video(self, path: Path) -> bool:
+        return self._is_in_category(path, "video")
+
+    @staticmethod
+    def _is_in_category(path: Path, category: str) -> bool:
+        return (mime := magic.from_file(path, mime=True)) and mime.lower().startswith(
+            category
+        )
 
 
 class NullDigest(Digest):
@@ -147,39 +186,6 @@ class DefaultAudioAdapter(AudioAdapter):
         entropy = -np.sum(norm_S * np.log2(norm_S), axis=0)
         entropy = float(np.mean(entropy))
         return entropy
-
-
-class FileTypeAdapter(Protocol):
-    def is_image(self, path: Path) -> bool:
-        ...
-
-    def is_audio(self, path: Path) -> bool:
-        ...
-
-    def is_video(self, path: Path) -> bool:
-        ...
-
-
-class DefaultFileTypeAdapter(FileTypeAdapter):
-    def is_image(self, path: Path) -> bool:
-        return (mime := magic.from_file(path, mime=True)) and mime.startswith("image")
-
-    def is_audio(self, path: Path) -> bool:
-        return (mime := magic.from_file(path, mime=True)) and mime.startswith("audio")
-
-    def is_video(self, path: Path) -> bool:
-        return (mime := magic.from_file(path, mime=True)) and mime.startswith("video")
-
-
-class VideoAdapter(Protocol):
-    class Metrics(TypedDict, total=False):
-        duration: float
-        frame_rate: float
-        width: int
-        height: int
-
-    def metrics(self, path: Path) -> Metrics:
-        ...
 
 
 class DefaultVideoAdapter(VideoAdapter):
