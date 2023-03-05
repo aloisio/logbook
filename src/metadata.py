@@ -11,7 +11,6 @@ from adapters import (
     FileTypeAdapter,
     DefaultFileTypeAdapter,
     Digest,
-    NullDigest,
 )
 
 
@@ -24,10 +23,10 @@ class Metadata(Protocol):
 class FileMetadata(Metadata):
     NAME = "FileMetadata"
 
-    def __init__(self, path, image_adapter: ImageAdapter, digest: Digest = None):
+    def __init__(self, path, image_adapter: ImageAdapter, digest: Digest):
         self._image_adapter = image_adapter
         self._path = path
-        self._digest = digest if digest is not None else NullDigest()
+        self._digest = digest
         self._compute_metadata()
 
     @property

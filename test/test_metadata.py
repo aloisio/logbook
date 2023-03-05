@@ -3,7 +3,7 @@ from unittest.mock import MagicMock
 
 from pytest import approx
 
-from adapters import AudioAdapter, ImageAdapter
+from adapters import AudioAdapter, ImageAdapter, Digest
 from metadata import (
     AudioFileMetadata,
     FileMetadataFactory,
@@ -41,7 +41,9 @@ def test_audio_file_metadata_factory():
 
 def test_metadata_aggregate():
     path = Path(__file__).parent / "100Hz_44100Hz_16bit_05sec.mp3"
-    file_metadata = FileMetadata(path, MagicMock(spec=ImageAdapter))
+    file_metadata = FileMetadata(
+        path, MagicMock(spec=ImageAdapter), MagicMock(spec=Digest)
+    )
     metadata = MetadataAggregate(FileMetadata=file_metadata)
     assert type(metadata["FileMetadata"]) == FileMetadata
     assert metadata["FileMetadata"] == file_metadata
@@ -61,7 +63,7 @@ def test_metadata_aggregate():
 
 
 def test_composite_metadata():
-    mock_file_metadata = FileMetadata(MagicMock(), MagicMock())
+    mock_file_metadata = FileMetadata(MagicMock(), MagicMock(), MagicMock())
     mock_audio_file_metadata = AudioFileMetadata(MagicMock(), MagicMock())
     type(mock_file_metadata).return_value = FileMetadata
     type(mock_audio_file_metadata).return_value = AudioFileMetadata
