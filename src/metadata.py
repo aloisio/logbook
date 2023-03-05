@@ -1,7 +1,7 @@
 from functools import cached_property
 from hashlib import blake2b
 from pathlib import Path
-from typing import Optional, Protocol, Tuple, Type, TypeVar, TypedDict
+from typing import Optional, Protocol, Tuple, Type, TypeVar, TypedDict, Iterable
 
 from adapters import (
     ImageAdapter,
@@ -131,6 +131,10 @@ class CompositeMetadata(Metadata):
 
     def metadata(self, cls: Type[T]) -> T:
         return self._aggregate[cls]
+
+    @property
+    def children(self) -> Iterable[Metadata]:
+        return self._aggregate.values()
 
 
 class MetadataAggregate(TypedDict, total=False):

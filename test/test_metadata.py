@@ -71,3 +71,6 @@ def test_composite_metadata():
         )
     )
     assert type(metadata.metadata(FileMetadata)) == FileMetadata
+    assert metadata.metadata(FileMetadata) == mock_file_metadata
+    assert metadata.metadata(AudioFileMetadata) == mock_audio_file_metadata
+    assert list(metadata.children) == [mock_file_metadata, mock_audio_file_metadata]
