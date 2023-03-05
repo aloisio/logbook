@@ -4,7 +4,6 @@ from hashlib import blake2b
 from pathlib import Path
 from typing import (
     Optional,
-    Tuple,
     Type,
     TypeVar,
     TypedDict,
@@ -98,8 +97,12 @@ class ImageFileMetadata(Metadata):
         return self._image_entropy
 
     @property
-    def size(self) -> Tuple[int, int]:
-        return self._image_size
+    def width(self) -> int:
+        return self._image_size[0]
+
+    @property
+    def height(self) -> int:
+        return self._image_size[1]
 
     @cached_property
     def fractal_dimension(self) -> list[float]:
