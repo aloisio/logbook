@@ -52,3 +52,5 @@ def test_default_video_adapter():
     adapter: VideoAdapter = DefaultVideoAdapter()
     assert adapter.metrics(VIDEO_FILE)["duration"] == approx(5.0, 0.01)
     assert adapter.metrics(VIDEO_FILE)["frame_rate"] == approx(30, 0.01)
+    assert adapter.metrics(VIDEO_FILE)["width"] == 190
+    assert adapter.metrics(VIDEO_FILE)["height"] == 240

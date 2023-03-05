@@ -97,3 +97,5 @@ def test_video_file_metadata_factory():
     )
     assert metadata.duration == approx(4.96666, 0.00001)
     assert metadata.frame_rate == approx(30)
+    assert metadata.width == 190
+    assert metadata.height == 240

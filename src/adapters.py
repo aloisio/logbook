@@ -9,6 +9,7 @@ import magic
 import numpy as np
 
 import fracdim
+from fractions import Fraction
 
 Image = PIL.Image.Image
 
@@ -165,6 +166,8 @@ class VideoAdapter(Protocol):
     class Metrics(TypedDict):
         duration: float
         frame_rate: float
+        width: int
+        height: int
 
     def metrics(self, path: Path) -> Metrics:
         ...
@@ -173,7 +176,11 @@ class VideoAdapter(Protocol):
 class DefaultVideoAdapter(VideoAdapter):
     def metrics(self, path: Path) -> VideoAdapter.Metrics:
         stream = ffmpeg.probe(str(path))
-        video_info = [v for v in stream["streams"] if v["codec_type"] == "video"][0]
-        duration = float(video_info["duration"])
-        frame_rate = float(eval(video_info["avg_frame_rate"]))
-        return VideoAdapter.Metrics(duration=duration, frame_rate=frame_rate)
+        video_stream = [v for v in stream["streams"] if v["codec_type"] == "video"][0]
+        duration = float(video_stream["duration"])
+        frame_rate = float(Fraction(video_stream["avg_frame_rate"]))
+        width = int(video_stream["width"])
+        height = int(video_stream["height"])
+        return VideoAdapter.Metrics(
+            duration=duration, frame_rate=frame_rate, width=width, height=height
+        )

@@ -136,6 +136,14 @@ class VideoFileMetadata(Metadata):
     def frame_rate(self) -> float:
         return self._metrics["frame_rate"]
 
+    @property
+    def width(self) -> int:
+        return self._metrics["width"]
+
+    @property
+    def height(self) -> int:
+        return self._metrics["height"]
+
 
 T = TypeVar("T", bound=Metadata)
 
@@ -167,15 +175,16 @@ class FileMetadataFactory:
         image_adapter: Optional[ImageAdapter]
         audio_adapter: Optional[AudioAdapter]
         file_type_adapter: Optional[FileTypeAdapter]
+        video_adapter: Optional[VideoAdapter]
 
     def __init__(self, **kwargs: FileMetadataFactoryArgs):
+        self._file_type_adapter = kwargs.get(
+            "file_type_adapter", DefaultFileTypeAdapter()
+        )
         self._digest = kwargs.get("digest", blake2b(digest_size=8))
         self._image_adapter = kwargs.get("image_adapter", DefaultImageAdapter())
         self._audio_adapter = kwargs.get("audio_adapter", DefaultAudioAdapter())
         self._video_adapter = kwargs.get("video_adapter", DefaultVideoAdapter())
-        self._file_type_adapter = kwargs.get(
-            "file_type_adapter", DefaultFileTypeAdapter()
-        )
 
     def create_metadata(self, path: Path) -> CompositeMetadata:
         aggregate = MetadataAggregate()
