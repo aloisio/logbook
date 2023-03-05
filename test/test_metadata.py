@@ -45,17 +45,28 @@ def test_audio_file_metadata_factory():
 
 
 def test_composite_metadata():
-    mock_file_metadata = FileMetadata(MagicMock(), MagicMock(), MagicMock())
-    mock_audio_file_metadata = AudioFileMetadata(MagicMock(), MagicMock())
-    metadata = CompositeMetadata(mock_file_metadata)
-    metadata.add(mock_audio_file_metadata)
-    with pytest.raises(TypeError):
+    existing_file_metadata = FileMetadata(MagicMock(), MagicMock(), MagicMock())
+    new_file_metadata = FileMetadata(MagicMock(), MagicMock(), MagicMock())
+    audio_file_metadata = AudioFileMetadata(MagicMock(), MagicMock())
+
+    composite_metadata = CompositeMetadata(existing_file_metadata)
+
+    composite_metadata.add(audio_file_metadata)
+    with pytest.raises(ValueError):
         # noinspection PyTypeChecker
-        metadata.add("33")
-    assert type(metadata.metadata(FileMetadata)) == FileMetadata
-    assert metadata.metadata(FileMetadata) == mock_file_metadata
-    assert metadata.metadata(AudioFileMetadata) == mock_audio_file_metadata
-    assert list(metadata.children) == [mock_file_metadata, mock_audio_file_metadata]
+        composite_metadata.add("33")
+    with pytest.raises(ValueError):
+        composite_metadata.add(new_file_metadata)
+    composite_metadata.add(new_file_metadata, overwrite=True)
+    assert composite_metadata.metadata(FileMetadata) is new_file_metadata
+    composite_metadata.add(existing_file_metadata, overwrite=True)
+    assert type(composite_metadata.metadata(FileMetadata)) == FileMetadata
+    assert composite_metadata.metadata(FileMetadata) == existing_file_metadata
+    assert composite_metadata.metadata(AudioFileMetadata) == audio_file_metadata
+    assert list(composite_metadata.children) == [
+        existing_file_metadata,
+        audio_file_metadata,
+    ]
 
 
 def test_video_file_metadata():

@@ -168,9 +168,17 @@ class CompositeMetadata(Metadata):
         super().__init__()
         self._aggregate = {type(m): m for m in metadata}
 
-    def add(self, metadata: T):
+    def add(self, metadata: T, overwrite=False):
         if not isinstance(metadata, Metadata):
-            raise TypeError(f"Parameter must be instance of {Metadata}")
+            raise ValueError(f"Parameter must be instance of {Metadata}")
+        if (
+            not overwrite
+            and type(metadata) in self._aggregate
+            and metadata is not self._aggregate[type(metadata)]
+        ):
+            raise ValueError(
+                f"{type(metadata)} already added. Use overwrite=True to replace it."
+            )
         self._aggregate.update({type(metadata): metadata})
 
     def metadata(self, cls: Type[T]) -> T:
