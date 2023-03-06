@@ -141,9 +141,9 @@ class CompositeMetadata(Metadata):
         if not isinstance(metadata, Metadata):
             raise ValueError(f"Parameter must be instance of {Metadata}")
         if (
-                not overwrite
-                and type(metadata) in self._aggregate
-                and metadata is not self._aggregate[type(metadata)]
+            not overwrite
+            and type(metadata) in self._aggregate
+            and metadata is not self._aggregate[type(metadata)]
         ):
             raise ValueError(
                 f"{type(metadata)} already added. Use overwrite=True to replace it."
