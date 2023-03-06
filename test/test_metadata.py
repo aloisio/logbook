@@ -1,11 +1,19 @@
 from pathlib import Path
 from statistics import quantiles, stdev
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, PropertyMock
 
 import pytest
 from pytest import approx
 
-from adapters import AudioAdapter, VideoAdapter
+from adapters import (
+    AudioAdapter,
+    VideoAdapter,
+    ImageAdapter,
+    Image,
+    DefaultImageAdapter,
+    NullDigest,
+    DefaultAudioAdapter,
+)
 from metadata import (
     AudioFileMetadata,
     VideoFileMetadata,
@@ -13,6 +21,7 @@ from metadata import (
     ImageFileMetadata,
     FileMetadataFactory,
     CompositeMetadata,
+    ImageMetadata,
 )
 
 FIXTURES = Path(__file__).parent / "fixtures"
@@ -49,9 +58,13 @@ def test_audio_file_metadata_factory():
 
 
 def test_composite_metadata():
-    existing_file_metadata = FileMetadata(MagicMock(), MagicMock(), MagicMock())
-    new_file_metadata = FileMetadata(MagicMock(), MagicMock(), MagicMock())
-    audio_file_metadata = AudioFileMetadata(MagicMock(), MagicMock())
+    existing_file_metadata = FileMetadata(
+        GRAYSCALE_IMAGE, DefaultImageAdapter(), NullDigest()
+    )
+    new_file_metadata = FileMetadata(
+        GRAYSCALE_IMAGE, DefaultImageAdapter(), NullDigest()
+    )
+    audio_file_metadata = AudioFileMetadata(AUDIO_FILE, DefaultAudioAdapter())
 
     composite_metadata = CompositeMetadata(existing_file_metadata)
 
@@ -99,9 +112,9 @@ def test_test_metadata_factory_empty_file(tmp_path):
     metadata = FileMetadataFactory().create_metadata(empty_file).metadata(FileMetadata)
     assert isinstance(metadata, FileMetadata)
     assert metadata.size == 0
-    assert metadata.histogram == ([256 * 256] + 255 * [0]) * 3
-    assert metadata.fractal_dimension == [approx(0)] * 256
-    assert metadata.entropy == approx(1.584962)
+    assert metadata.histogram_image_metadata.histogram == ([256 * 256] + 255 * [0]) * 3
+    assert metadata.histogram_image_metadata.fractal_dimension == [approx(0)] * 256
+    assert metadata.histogram_image_metadata.entropy == approx(1.584962)
     assert metadata.checksum == "700ccbe90581dc21"
     assert metadata.path_with_checksum == tmp_path / "test.700ccbe90581dc21.txt"
 
@@ -112,9 +125,13 @@ def test_metadata_factory_text_file(tmp_path):
     metadata = FileMetadataFactory().create_metadata(text_file).metadata(FileMetadata)
     assert isinstance(metadata, FileMetadata)
     assert metadata.size == 11
-    assert metadata.histogram == ([65526] + [0] * 254 + [10]) * 3
-    assert metadata.fractal_dimension == [approx(0.6097147)] * 255 + [approx(0)]
-    assert metadata.entropy == approx(1.587117)
+    assert (
+        metadata.histogram_image_metadata.histogram == ([65526] + [0] * 254 + [10]) * 3
+    )
+    assert metadata.histogram_image_metadata.fractal_dimension == [
+        approx(0.6097147)
+    ] * 255 + [approx(0)]
+    assert metadata.histogram_image_metadata.entropy == approx(1.587117)
     assert metadata.checksum == "f8a5e764340d6f3e"
     assert metadata.path_with_checksum == tmp_path / "test.f8a5e764340d6f3e.txt"
 
@@ -125,24 +142,24 @@ def test_metadata_factory_grayscale_image():
     all_metadata: CompositeMetadata = factory.create_metadata(image_file)
     metadata = all_metadata.metadata(ImageFileMetadata)
     assert isinstance(metadata, ImageFileMetadata)
-    assert metadata.width == 1018
-    assert metadata.height == 821
-    assert quantiles(metadata.histogram) == [27.0, 40.5, 73.0]
-    assert quantiles(metadata.fractal_dimension) == [
+    assert metadata.image_metadata.width == 1018
+    assert metadata.image_metadata.height == 821
+    assert quantiles(metadata.image_metadata.histogram) == [27.0, 40.5, 73.0]
+    assert quantiles(metadata.image_metadata.fractal_dimension) == [
         approx(1.5880126),
         approx(1.643898),
         approx(1.660302),
     ]
-    assert metadata.entropy == approx(3.0831189)
+    assert metadata.image_metadata.entropy == approx(3.0831189)
     metadata = all_metadata.metadata(FileMetadata)
     assert isinstance(metadata, FileMetadata)
     assert metadata.size == 127620
-    assert stdev(metadata.histogram) == approx(1851.915599)
-    assert quantiles(metadata.fractal_dimension) == list(
+    assert stdev(metadata.histogram_image_metadata.histogram) == approx(1851.915599)
+    assert quantiles(metadata.histogram_image_metadata.fractal_dimension) == list(
         map(approx, [0.4932759, 0.50088119, 0.7010070])
     )
-    assert quantiles(metadata.histogram) == [0, 0, 0]
-    assert metadata.entropy == approx(4.1861197)
+    assert quantiles(metadata.histogram_image_metadata.histogram) == [0, 0, 0]
+    assert metadata.histogram_image_metadata.entropy == approx(4.1861197)
     assert metadata.checksum == "94cc2cbc92ef3c0f"
     assert (
         metadata.path_with_checksum
@@ -156,21 +173,21 @@ def test_metadata_factory_colour_image_file():
     all_metadata = factory.create_metadata(image_file)
     metadata = all_metadata.metadata(ImageFileMetadata)
     assert isinstance(metadata, ImageFileMetadata)
-    assert metadata.width == 1187
-    assert metadata.height == 845
-    assert quantiles(metadata.histogram) == [5.0, 8.0, 15.0]
-    assert quantiles(metadata.fractal_dimension) == list(
+    assert metadata.image_metadata.width == 1187
+    assert metadata.image_metadata.height == 845
+    assert quantiles(metadata.image_metadata.histogram) == [5.0, 8.0, 15.0]
+    assert quantiles(metadata.image_metadata.fractal_dimension) == list(
         map(approx, [0.99072488, 1.389666, 1.402276])
     )
-    assert metadata.entropy == approx(1.278420)
+    assert metadata.image_metadata.entropy == approx(1.278420)
     metadata = all_metadata.metadata(FileMetadata)
     assert isinstance(metadata, FileMetadata)
     assert metadata.size == 19845
-    assert stdev(metadata.histogram) == approx(3309.278007)
-    assert quantiles(metadata.fractal_dimension) == list(
+    assert stdev(metadata.histogram_image_metadata.histogram) == approx(3309.278007)
+    assert quantiles(metadata.histogram_image_metadata.fractal_dimension) == list(
         map(approx, [0.21160032, 1.9942328, 1.9943503])
     )
-    assert metadata.entropy == approx(2.5157758)
+    assert metadata.histogram_image_metadata.entropy == approx(2.5157758)
     assert metadata.checksum == "139f194152e9346c"
     assert (
         metadata.path_with_checksum == image_file.parent / "brazil.139f194152e9346c.png"
@@ -199,24 +216,13 @@ def test_file_metadata_creation(sample_file, file_factory):
     assert metadata.size == 11
 
 
-def test_create_file_metadata():
-    mock_image_adapter = MagicMock()
-    mock_file_type_adapter = MagicMock()
-    file_path = GRAYSCALE_IMAGE
-    mock_image_adapter.is_image.return_value = True
-    factory = FileMetadataFactory(
-        image_adapter=mock_image_adapter, file_type_adapter=mock_file_type_adapter
-    )
-    metadata = factory.create_metadata(file_path).metadata(ImageFileMetadata)
-    assert isinstance(metadata, ImageFileMetadata)
-    assert metadata.path == file_path
-    assert metadata._image_adapter == mock_image_adapter
+def test_image_metadata():
+    mock_image_adapter = MagicMock(spec=ImageAdapter)
+    image = MagicMock(spec=Image)
+    type(mock_image_adapter).last_size = PropertyMock(return_value=(1280, 720))
+    assert mock_image_adapter.last_size == (1280, 720)
 
+    image_metadata = ImageMetadata(image, mock_image_adapter)
 
-def test_image_file_metadata():
-    image_adapter = MagicMock()
-    path = GRAYSCALE_IMAGE
-    file_metadata = ImageFileMetadata(path, image_adapter)
-
-    assert file_metadata.path == path
-    assert file_metadata._image_adapter == image_adapter
+    assert image_metadata.width == 1280
+    assert image_metadata.height == 720

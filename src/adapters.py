@@ -36,6 +36,9 @@ class Digest(Protocol):
 
 
 class ImageAdapter(Protocol):
+    def load(self, file_path: Path) -> Image:
+        ...
+
     def to_grayscale(self, image: Image) -> Array:
         ...
 
@@ -45,7 +48,7 @@ class ImageAdapter(Protocol):
     def rgb_histogram(self, image: Image) -> list[int]:
         ...
 
-    def thumbnail(self, path: Path) -> Image:
+    def thumbnail(self, source: Image) -> Image:
         ...
 
     def fractal_dimension(self, grayscale: Array) -> list[float]:
@@ -116,6 +119,9 @@ class DefaultImageAdapter(ImageAdapter):
         self._last_size: Optional[tuple[int, int]] = None
         self._last_entropy: Optional[float] = None
 
+    def load(self, file_path: Path) -> Image:
+        return PIL.Image.open(file_path)
+
     def histogram(self, file_path: Path, digest: Digest = None) -> Image:
         digest = digest if digest is not None else NullDigest()
         hist = np.zeros((256, 256), dtype=np.uint8)
@@ -139,13 +145,12 @@ class DefaultImageAdapter(ImageAdapter):
         digest.update(struct.pack("<f", entropy))
         return histogram_image
 
-    def thumbnail(self, path: Path) -> Image:
-        with PIL.Image.open(path) as image:
-            thumbnail_image: PIL.Image = image.convert(mode="RGB").resize(
-                (256, 256), PIL.Image.BICUBIC
-            )
-            self._last_entropy = image.entropy()
-            self._last_size = image.size
+    def thumbnail(self, source: Image) -> Image:
+        thumbnail_image: PIL.Image = source.convert(mode="RGB").resize(
+            (256, 256), PIL.Image.BICUBIC
+        )
+        self._last_entropy = source.entropy()
+        self._last_size = source.size
         return thumbnail_image
 
     @property

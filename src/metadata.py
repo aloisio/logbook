@@ -20,6 +20,7 @@ from adapters import (
     Digest,
     VideoAdapter,
     DefaultVideoAdapter,
+    Image,
 )
 
 
@@ -43,14 +44,6 @@ class FileMetadata(Metadata):
         return self._path
 
     @property
-    def histogram(self) -> list[int]:
-        return self._byte_histogram
-
-    @property
-    def entropy(self) -> float:
-        return self._byte_entropy
-
-    @property
     def size(self) -> int:
         return self._byte_size
 
@@ -64,10 +57,6 @@ class FileMetadata(Metadata):
     def checksum(self) -> str:
         return self._checksum
 
-    @cached_property
-    def fractal_dimension(self) -> list[float]:
-        return self._image_adapter.fractal_dimension(self._byte_thumbnail)
-
     def _compute_metadata(self):
         if hasattr(self, "_checksum"):
             return
@@ -76,47 +65,24 @@ class FileMetadata(Metadata):
         """
         self._byte_size = self.path.stat().st_size
         histogram_image = self._image_adapter.histogram(self.path, self._digest)
-        self._byte_entropy = self._image_adapter.last_entropy
-        self._byte_histogram = self._image_adapter.rgb_histogram(histogram_image)
-        self._byte_thumbnail = self._image_adapter.to_grayscale(histogram_image)
         self._checksum = self._digest.hexdigest()
+        self._histogram_image_metadata = ImageMetadata(
+            histogram_image, self._image_adapter
+        )
+
+    @property
+    def histogram_image_metadata(self) -> "ImageMetadata":
+        return self._histogram_image_metadata
 
 
 class ImageFileMetadata(Metadata):
     def __init__(self, path, image_adapter: ImageAdapter):
-        self.path = path
+        self._path = path
         self._image_adapter = image_adapter
-        self._compute_metadata()
-
-    @property
-    def histogram(self) -> list[int]:
-        return self._image_histogram
-
-    @property
-    def entropy(self) -> float:
-        return self._image_entropy
-
-    @property
-    def width(self) -> int:
-        return self._image_size[0]
-
-    @property
-    def height(self) -> int:
-        return self._image_size[1]
 
     @cached_property
-    def fractal_dimension(self) -> list[float]:
-        return self._image_adapter.fractal_dimension(self._image_thumbnail)
-
-    def _compute_metadata(self):
-        """
-        Creates fields: _checksum, _image_entropy, _image_histogram, _image_size, _image_thumbnail
-        """
-        thumbnail_image = self._image_adapter.thumbnail(self.path)
-        self._image_size = self._image_adapter.last_size
-        self._image_entropy = self._image_adapter.last_entropy
-        self._image_histogram = self._image_adapter.rgb_histogram(thumbnail_image)
-        self._image_thumbnail = self._image_adapter.to_grayscale(thumbnail_image)
+    def image_metadata(self) -> "ImageMetadata":
+        return ImageMetadata(self._image_adapter.load(self._path), self._image_adapter)
 
 
 class AudioFileMetadata(Metadata):
@@ -175,9 +141,9 @@ class CompositeMetadata(Metadata):
         if not isinstance(metadata, Metadata):
             raise ValueError(f"Parameter must be instance of {Metadata}")
         if (
-            not overwrite
-            and type(metadata) in self._aggregate
-            and metadata is not self._aggregate[type(metadata)]
+                not overwrite
+                and type(metadata) in self._aggregate
+                and metadata is not self._aggregate[type(metadata)]
         ):
             raise ValueError(
                 f"{type(metadata)} already added. Use overwrite=True to replace it."
@@ -190,6 +156,36 @@ class CompositeMetadata(Metadata):
     @property
     def children(self) -> Iterable[Metadata]:
         return self._aggregate.values()
+
+
+class ImageMetadata(Metadata):
+    def __init__(self, image: Image, image_adapter: ImageAdapter):
+        self._image_adapter = image_adapter
+        thumbnail_image = image_adapter.thumbnail(image)
+        self._width, self._height = image_adapter.last_size
+        self._image_entropy = image_adapter.last_entropy
+        self._image_histogram = image_adapter.rgb_histogram(thumbnail_image)
+        self._image_thumbnail = image_adapter.to_grayscale(thumbnail_image)
+
+    @property
+    def width(self) -> int:
+        return self._width
+
+    @property
+    def height(self) -> int:
+        return self._height
+
+    @cached_property
+    def fractal_dimension(self) -> list[float]:
+        return self._image_adapter.fractal_dimension(self._image_thumbnail)
+
+    @property
+    def histogram(self) -> list[int]:
+        return self._image_histogram
+
+    @property
+    def entropy(self) -> float:
+        return self._image_entropy
 
 
 class FileMetadataFactory:

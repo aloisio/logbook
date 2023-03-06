@@ -15,6 +15,7 @@ from adapters import (
     DefaultFileTypeAdapter,
     VideoAdapter,
     DefaultVideoAdapter,
+    DefaultImageAdapter,
 )
 
 
@@ -23,6 +24,13 @@ def test_default_audio_adapter():
     audio_file = AUDIO_FILE
     assert adapter.metrics(audio_file)["duration"] == approx(5.0, 0.01)
     assert adapter.metrics(audio_file)["entropy"] == approx(1.96, 0.01)
+
+
+def test_default_image_adapter():
+    adapter = DefaultImageAdapter()
+    image = adapter.load(GRAYSCALE_IMAGE)
+    assert image.width == 1018
+    assert image.height == 821
 
 
 def test_default_file_type_adapter_image():
