@@ -9,7 +9,6 @@ GRAYSCALE_IMAGE = FIXTURES / "sierpinski.jpg"
 from pytest import approx
 
 from adapters import (
-    DefaultAudioAdapter,
     AudioAdapter,
     FileTypeAdapter,
     DefaultFileTypeAdapter,
@@ -17,10 +16,11 @@ from adapters import (
     DefaultVideoAdapter,
     DefaultImageAdapter,
 )
+from adapters.librosa_audio_adapter import LibrosaAudioAdapter
 
 
 def test_default_audio_adapter():
-    adapter: AudioAdapter = DefaultAudioAdapter()
+    adapter: AudioAdapter = LibrosaAudioAdapter()
     audio_file = AUDIO_FILE
     assert adapter.metrics(audio_file)["duration"] == approx(5.0, 0.01)
     assert adapter.metrics(audio_file)["entropy"] == approx(1.96, 0.01)

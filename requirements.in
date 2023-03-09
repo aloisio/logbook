@@ -1,0 +1,11 @@
+lxml
+markdown-it-py
+mdformat-gfm
+mdformat
+pytest
+Pillow
+numpy
+librosa
+python-magic
+ffmpeg-python
+mypy

@@ -12,8 +12,8 @@ from adapters import (
     Image,
     DefaultImageAdapter,
     NullDigest,
-    DefaultAudioAdapter,
 )
+from adapters.librosa_audio_adapter import LibrosaAudioAdapter
 from metadata import (
     AudioFileMetadata,
     VideoFileMetadata,
@@ -64,7 +64,7 @@ def test_composite_metadata():
     new_file_metadata = FileMetadata(
         GRAYSCALE_IMAGE, DefaultImageAdapter(), NullDigest()
     )
-    audio_file_metadata = AudioFileMetadata(AUDIO_FILE, DefaultAudioAdapter())
+    audio_file_metadata = AudioFileMetadata(AUDIO_FILE, LibrosaAudioAdapter())
 
     composite_metadata = CompositeMetadata(existing_file_metadata)
 
@@ -222,7 +222,9 @@ def test_image_metadata():
     type(mock_image_adapter).last_size = PropertyMock(return_value=(1280, 720))
     assert mock_image_adapter.last_size == (1280, 720)
 
-    image_metadata = ImageMetadata(image, mock_image_adapter)
+    image_metadata = ImageMetadata(
+        image=image, image_adapter=mock_image_adapter, fractal_dimension=3
+    )
 
     assert image_metadata.width == 1280
     assert image_metadata.height == 720

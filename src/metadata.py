@@ -10,11 +10,12 @@ from typing import (
     Iterable,
 )
 
+from typing_extensions import Unpack, Required, NotRequired
+
 from adapters import (
     ImageAdapter,
     AudioAdapter,
     DefaultImageAdapter,
-    DefaultAudioAdapter,
     FileTypeAdapter,
     DefaultFileTypeAdapter,
     Digest,
@@ -22,14 +23,53 @@ from adapters import (
     DefaultVideoAdapter,
     Image,
 )
+from adapters.librosa_audio_adapter import LibrosaAudioAdapter
 
 
-# noinspection PyPropertyDefinition, PyRedeclaration
 class Metadata(ABC):
     ...
 
 
-# noinspection PyAttributeOutsideInit
+class ImageMetadata(Metadata):
+    class Arguments(TypedDict):
+        image: Required[Image]
+        image_adapter: Required[ImageAdapter]
+        fractal_dimension: NotRequired[bool]
+
+    def __init__(self, **kwargs: Unpack[Arguments]):
+        args = self.Arguments(**kwargs)
+        image_adapter = args["image_adapter"]
+        thumbnail_image = image_adapter.thumbnail(args["image"])
+        self._width, self._height = image_adapter.last_size
+        self._image_entropy = image_adapter.last_entropy
+        self._image_histogram = image_adapter.rgb_histogram(thumbnail_image)
+        self._fractal_dimension = (
+            image_adapter.fractal_dimension(image_adapter.to_grayscale(thumbnail_image))
+            if args.get("fractal_dimension", False)
+            else None
+        )
+
+    @property
+    def width(self) -> int:
+        return self._width
+
+    @property
+    def height(self) -> int:
+        return self._height
+
+    @cached_property
+    def fractal_dimension(self) -> list[float]:
+        return self._fractal_dimension
+
+    @property
+    def histogram(self) -> list[int]:
+        return self._image_histogram
+
+    @property
+    def entropy(self) -> float:
+        return self._image_entropy
+
+
 class FileMetadata(Metadata):
     NAME = "FileMetadata"
 
@@ -58,20 +98,20 @@ class FileMetadata(Metadata):
         return self._checksum
 
     def _compute_metadata(self):
-        if hasattr(self, "_checksum"):
-            return
         """
-        Creates fields: _byte_entropy, _byte_histogram, _byte_size, _byte_thumbnail, _checksum
+        Creates fields: _byte_size, _checksum, _histogram_image_metadata
         """
         self._byte_size = self.path.stat().st_size
         histogram_image = self._image_adapter.histogram(self.path, self._digest)
         self._checksum = self._digest.hexdigest()
         self._histogram_image_metadata = ImageMetadata(
-            histogram_image, self._image_adapter
+            image=histogram_image,
+            image_adapter=self._image_adapter,
+            fractal_dimension=True,
         )
 
     @property
-    def histogram_image_metadata(self) -> "ImageMetadata":
+    def histogram_image_metadata(self) -> ImageMetadata:
         return self._histogram_image_metadata
 
 
@@ -81,8 +121,12 @@ class ImageFileMetadata(Metadata):
         self._image_adapter = image_adapter
 
     @cached_property
-    def image_metadata(self) -> "ImageMetadata":
-        return ImageMetadata(self._image_adapter.load(self._path), self._image_adapter)
+    def image_metadata(self) -> ImageMetadata:
+        return ImageMetadata(
+            image=self._image_adapter.load(self._path),
+            image_adapter=self._image_adapter,
+            fractal_dimension=True,
+        )
 
 
 class AudioFileMetadata(Metadata):
@@ -137,7 +181,7 @@ class CompositeMetadata(Metadata):
         super().__init__()
         self._aggregate = {type(m): m for m in metadata}
 
-    def add(self, metadata: T, overwrite=False):
+    def add(self, metadata: T, overwrite=False) -> None:
         if not isinstance(metadata, Metadata):
             raise ValueError(f"Parameter must be instance of {Metadata}")
         if (
@@ -158,52 +202,29 @@ class CompositeMetadata(Metadata):
         return self._aggregate.values()
 
 
-class ImageMetadata(Metadata):
-    def __init__(self, image: Image, image_adapter: ImageAdapter):
-        self._image_adapter = image_adapter
-        thumbnail_image = image_adapter.thumbnail(image)
-        self._width, self._height = image_adapter.last_size
-        self._image_entropy = image_adapter.last_entropy
-        self._image_histogram = image_adapter.rgb_histogram(thumbnail_image)
-        self._image_thumbnail = image_adapter.to_grayscale(thumbnail_image)
-
-    @property
-    def width(self) -> int:
-        return self._width
-
-    @property
-    def height(self) -> int:
-        return self._height
-
-    @cached_property
-    def fractal_dimension(self) -> list[float]:
-        return self._image_adapter.fractal_dimension(self._image_thumbnail)
-
-    @property
-    def histogram(self) -> list[int]:
-        return self._image_histogram
-
-    @property
-    def entropy(self) -> float:
-        return self._image_entropy
-
-
 class FileMetadataFactory:
-    class FileMetadataFactoryArgs(TypedDict, total=False):
-        digest: Optional[Digest]
-        image_adapter: Optional[ImageAdapter]
-        audio_adapter: Optional[AudioAdapter]
-        file_type_adapter: Optional[FileTypeAdapter]
-        video_adapter: Optional[VideoAdapter]
+    class Arguments(TypedDict, total=False):
+        digest: NotRequired[Digest]
+        image_adapter: NotRequired[ImageAdapter]
+        audio_adapter: NotRequired[AudioAdapter]
+        file_type_adapter: NotRequired[FileTypeAdapter]
+        video_adapter: NotRequired[VideoAdapter]
 
-    def __init__(self, **kwargs: FileMetadataFactoryArgs):
-        self._file_type_adapter = kwargs.get(
+    def __init__(self, **kwargs: Unpack[Arguments]):
+        args = self.Arguments(**kwargs)
+        self._file_type_adapter = args.get(
             "file_type_adapter", DefaultFileTypeAdapter()
         )
-        self._digest = kwargs.get("digest", blake2b(digest_size=8))
-        self._image_adapter = kwargs.get("image_adapter", DefaultImageAdapter())
-        self._audio_adapter = kwargs.get("audio_adapter", DefaultAudioAdapter())
-        self._video_adapter = kwargs.get("video_adapter", DefaultVideoAdapter())
+        self._digest = args.get("digest", blake2b(digest_size=8))
+        self._image_adapter = (
+            args["image_adapter"] if "image_adapter" in args else DefaultImageAdapter()
+        )
+        self._audio_adapter = (
+            args["audio_adapter"] if "audio_adapter" in args else LibrosaAudioAdapter()
+        )
+        self._video_adapter = (
+            args["video_adapter"] if "video_adapter" in args else DefaultVideoAdapter()
+        )
 
     def create_metadata(self, path: Path) -> CompositeMetadata:
         metadata = CompositeMetadata()
