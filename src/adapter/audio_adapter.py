@@ -3,7 +3,7 @@ from pathlib import Path
 import librosa
 import numpy as np
 
-from adapters import AudioAdapter
+from adapter import AudioAdapter
 
 
 class LibrosaAudioAdapter(AudioAdapter):

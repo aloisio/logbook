@@ -9,7 +9,7 @@
 import numpy as np
 
 
-def fractal_dimension(Z, threshold=128):
+def fractal_dimension(Z: np.ndarray, threshold=128):
     # Only for 2d image
     assert len(Z.shape) == 2
 

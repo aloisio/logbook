@@ -4,7 +4,8 @@ from argparse import ArgumentParser
 from itertools import filterfalse
 from pathlib import Path
 
-from metadata import FileMetadataFactory, FileMetadata
+from metadata import FileMetadata
+from metadata.file_metadata import FileMetadataFactory
 
 CHKSUM_PATTERN = re.compile(r"^.*\.(?P<checksum>[0-9a-fA-F]{16})$")
 
@@ -31,7 +32,7 @@ def main(write: bool, *patterns: str):
     failures = []
     for path in sorted(set(files).union(set(glob_files))):
         checksum = (
-            FileMetadataFactory().create_metadata(path).metadata(FileMetadata).checksum
+            FileMetadataFactory().create_metadata(path).get(FileMetadata).checksum
         )
         match = CHKSUM_PATTERN.match(path.stem)
         original_checksum = match.group("checksum") if match else None

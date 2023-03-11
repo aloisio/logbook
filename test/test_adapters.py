@@ -8,15 +8,15 @@ GRAYSCALE_IMAGE = FIXTURES / "sierpinski.jpg"
 
 from pytest import approx
 
-from adapters import (
+from adapter import (
     AudioAdapter,
     FileTypeAdapter,
     DefaultFileTypeAdapter,
     VideoAdapter,
-    DefaultVideoAdapter,
-    DefaultImageAdapter,
 )
-from adapters.librosa_audio_adapter import LibrosaAudioAdapter
+from adapter.video_adapter import DefaultVideoAdapter
+from adapter.image_adapter import DefaultImageAdapter
+from adapter.audio_adapter import LibrosaAudioAdapter
 
 
 def test_default_audio_adapter():
@@ -57,9 +57,18 @@ def test_default_file_type_adapter_video():
     assert adapter.is_video(VIDEO_FILE)
 
 
-def test_default_video_adapter():
+def test_default_video_adapter_metrics():
     adapter: VideoAdapter = DefaultVideoAdapter()
-    assert adapter.metrics(VIDEO_FILE)["duration"] == approx(5.0, 0.01)
-    assert adapter.metrics(VIDEO_FILE)["frame_rate"] == approx(30, 0.01)
-    assert adapter.metrics(VIDEO_FILE)["width"] == 190
-    assert adapter.metrics(VIDEO_FILE)["height"] == 240
+    assert adapter.metrics(VIDEO_FILE).duration == approx(5.0, 0.01)
+    assert adapter.metrics(VIDEO_FILE).frame_rate == approx(30, 0.01)
+    assert adapter.metrics(VIDEO_FILE).width == 190
+    assert adapter.metrics(VIDEO_FILE).height == 240
+    assert adapter.metrics(VIDEO_FILE).number_of_frames == 149
+
+
+def test_default_video_adapter_frame_spec():
+    adapter = DefaultVideoAdapter()
+    spec = adapter.frame_spec(VIDEO_FILE)
+    assert spec.size == (202, 256)
+    assert spec.frame_numbers == ([8, 23, 38, 53, 68, 83, 98, 113, 128])
+    assert spec.total_number_of_frames == 149

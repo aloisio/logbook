@@ -8,4 +8,4 @@ numpy
 librosa
 python-magic
 ffmpeg-python
-mypy
+opencv-python
