@@ -1,4 +1,5 @@
 import math
+import sys
 import time
 from dataclasses import dataclass
 from fractions import Fraction
@@ -12,8 +13,9 @@ import ffmpeg
 
 from adapter import Image
 
-DEFAULT_TIMEOUT = 7.5
+DEFAULT_TIMEOUT = 60
 DEFAULT_SIZE = 256
+DEFAULT_START_PERCENTAGE = 2.5
 
 
 class VideoAdapter(Protocol):
@@ -68,15 +70,15 @@ class DefaultVideoAdapter(VideoAdapter):
             if capture:
                 return capture
         except Exception as exc:
-            print(exc)
+            print(exc, file=sys.stderr)
         return self._ffmpeg_adapter.frames(path, frame_spec)
 
     def frame_spec(
         self,
         path: Path,
         min_sample_size: int = 3,
-        start_percentage: float = 5,
-        end_percentage: float = 95,
+        start_percentage: float = DEFAULT_START_PERCENTAGE,
+        end_percentage: float = 100 - DEFAULT_START_PERCENTAGE,
     ) -> VideoAdapter.FrameSpec:
         metrics = self.metrics(path)
         print(f"{metrics=}")

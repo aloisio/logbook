@@ -4,8 +4,7 @@ from typing import TypedDict
 
 from typing_extensions import Required, Unpack
 
-from adapter import VideoAdapter, ImageAdapter, Image
-from .image_metadata import ImageMetadata
+from adapter import VideoAdapter, ImageAdapter
 from .metadata_base import Metadata
 
 
@@ -40,26 +39,3 @@ class VideoFileMetadata(Metadata):
     @cached_property
     def _metrics(self):
         return self._video_adapter.metrics(self._path)
-
-
-class VideoFrameMetadata(Metadata):
-    class Arguments(TypedDict):
-        position: Required[float]
-        image: Required[Image]
-        image_adapter: Required[ImageAdapter]
-
-    def __init__(self, **kwargs: Unpack[Arguments]):
-        self._args = self.Arguments(**kwargs)
-        self._image_metadata = ImageMetadata(
-            image=self._args["image"],
-            image_adapter=self._args["image_adapter"],
-            fractal_dimension=True,
-        )
-
-    @property
-    def position(self) -> float:
-        return self._args["position"]
-
-    @property
-    def image_metadata(self) -> ImageMetadata:
-        return self._image_metadata

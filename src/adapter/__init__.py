@@ -1,7 +1,8 @@
 from pathlib import Path
-from typing import Protocol, Optional, TypedDict
-from typing_extensions import Required
+from typing import Protocol, TypedDict
+
 import magic
+from typing_extensions import Required
 
 from adapter.base_adapter import Image, Array
 from adapter.video_adapter import VideoAdapter, DefaultVideoAdapter
@@ -72,13 +73,14 @@ class ImageAdapter(Protocol):
     def noise(self, grayscale: Image) -> float:
         ...
 
-    @property
-    def last_entropy(self) -> Optional[float]:
-        raise NotImplemented
+    def entropy(self, image: Image) -> float:
+        ...
 
-    @property
-    def last_size(self) -> Optional[tuple[int, int]]:
-        raise NotImplemented
+    def quadrants(self, image: Image) -> tuple[Image, Image, Image, Image]:
+        ...
+
+    def from_data_url(self, data_url: str) -> Image:
+        ...
 
 
 class AudioAdapter(Protocol):

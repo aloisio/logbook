@@ -3,4 +3,4 @@ import numpy as np
 
 Image = PIL.Image.Image
 
-Array = np.array
+Array = np.ndarray

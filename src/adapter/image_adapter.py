@@ -1,4 +1,6 @@
 import struct
+from base64 import b64decode
+from io import BytesIO
 from pathlib import Path
 from typing import Optional
 
@@ -11,18 +13,14 @@ from scipy.signal import convolve2d
 from scipy.stats import skew, kurtosis
 
 import fracdim
-from adapter import ImageAdapter, Digest, NullDigest, Array
+from adapter import ImageAdapter, Digest, NullDigest
 
 
 class DefaultImageAdapter(ImageAdapter):
-    def __init__(self):
-        self._last_size: Optional[tuple[int, int]] = None
-        self._last_entropy: Optional[float] = None
-
     def load(self, file_path: Path) -> Image:
         return PIL.Image.open(file_path)
 
-    def histogram(self, file_path: Path, digest: Digest = None) -> Image:
+    def histogram(self, file_path: Path, digest: Optional[Digest] = None) -> Image:
         digest = digest if digest is not None else NullDigest()
         hist = np.zeros((256, 256), dtype=np.uint8)
         with file_path.open("rb") as f:
@@ -35,13 +33,13 @@ class DefaultImageAdapter(ImageAdapter):
                 np.add.at(hist, (x, y), 1)
 
         hist = (hist * 0xFFFFFF) // np.clip(hist.max(initial=0), a_min=1, a_max=None)
-        rgb_hist = Array(
+        rgb_hist = np.array(
             [(hist >> 16) & 0xFF, (hist >> 8) & 0xFF, hist & 0xFF], dtype=np.uint8
         ).transpose((1, 2, 0))
+
         histogram_image = PIL.Image.fromarray(rgb_hist, "RGB")
         digest.update(self._to_bytes(histogram_image))
         entropy = histogram_image.entropy()
-        self._last_entropy = entropy
         digest.update(struct.pack("<f", entropy))
         return histogram_image
 
@@ -49,17 +47,7 @@ class DefaultImageAdapter(ImageAdapter):
         thumbnail_image: PIL.Image = source.convert(mode="RGB").resize(
             (256, 256), PIL.Image.BICUBIC
         )
-        self._last_entropy = source.entropy()
-        self._last_size = source.size
         return thumbnail_image
-
-    @property
-    def last_entropy(self) -> Optional[float]:
-        return self._last_entropy
-
-    @property
-    def last_size(self) -> Optional[tuple[int, int]]:
-        return self._last_size
 
     def fractal_dimension(self, grayscale: Image) -> list[float]:
         # noinspection PyTypeChecker
@@ -219,7 +207,30 @@ class DefaultImageAdapter(ImageAdapter):
 
         return vibrance.item()
 
+    def entropy(self, image: Image) -> float:
+        return image.entropy()
+
+    def quadrants(self, image: Image) -> tuple[Image, Image, Image, Image]:
+        width, height = image.size
+        # Calculate the coordinates of the four sub-images
+        top_left = (0, 0, width // 2, height // 2)
+        top_right = (width // 2, 0, width, height // 2)
+        bottom_left = (0, height // 2, width // 2, height)
+        bottom_right = (width // 2, height // 2, width, height)
+
+        # Crop the original image to get each sub-image
+        return (
+            image.crop(top_left),
+            image.crop(top_right),
+            image.crop(bottom_left),
+            image.crop(bottom_right),
+        )
+
+    def from_data_url(self, data_url: str) -> Image:
+        image_data = b64decode(data_url.split(",")[1])
+        return Image.open(BytesIO(image_data))
+
     @staticmethod
     def _to_bytes(image: Image) -> bytes:
         # noinspection PyTypeChecker
-        return Array(image).flatten().tobytes()
+        return np.array(image).flatten().tobytes()
