@@ -14,7 +14,6 @@ from adapter import (
     VideoAdapter,
     ImageAdapter,
     Image,
-    NullDigest,
 )
 from adapter.audio_adapter import LibrosaAudioAdapter
 from adapter.image_adapter import DefaultImageAdapter
@@ -120,12 +119,8 @@ def test_audio_file_metadata():
 
 
 def test_composite_metadata():
-    existing_file_metadata = FileMetadata(
-        GRAYSCALE_IMAGE, DefaultImageAdapter(), NullDigest()
-    )
-    new_file_metadata = FileMetadata(
-        GRAYSCALE_IMAGE, DefaultImageAdapter(), NullDigest()
-    )
+    existing_file_metadata = FileMetadata(GRAYSCALE_IMAGE, DefaultImageAdapter())
+    new_file_metadata = FileMetadata(GRAYSCALE_IMAGE, DefaultImageAdapter())
     audio_file_metadata = AudioFileMetadata(AUDIO_FILE, LibrosaAudioAdapter())
 
     composite_metadata = CompositeMetadata(existing_file_metadata)
@@ -168,11 +163,11 @@ def test_metadata_factory_empty_file(tmp_path):
     composite_metadata = FileMetadataFactory().create_metadata(empty_file)
     file_metadata = composite_metadata.get(FileMetadata)
     assert isinstance(file_metadata, FileMetadata)
-    assert file_metadata.checksum == "700ccbe90581dc21"
+    assert file_metadata.checksum == "cae66941d9efbd404e4d88758ea67670"
     assert file_metadata.path == empty_file
     assert (
         file_metadata.path_with_checksum
-        == empty_file.parent / f"{empty_file.stem}.700ccbe90581dc21.txt"
+        == empty_file.parent / f"{empty_file.stem}.cae66941d9efbd404e4d88758ea67670.txt"
     )
     assert file_metadata.size == 0
     histogram_image_metadata = file_metadata.histogram_image_metadata
@@ -196,11 +191,11 @@ def test_metadata_factory_text_file(tmp_path):
     composite_metadata = FileMetadataFactory().create_metadata(text_file)
     file_metadata = composite_metadata.get(FileMetadata)
     assert isinstance(file_metadata, FileMetadata)
-    assert file_metadata.checksum == "f8a5e764340d6f3e"
+    assert file_metadata.checksum == "0cc84ab57c476d2385b899ca742a2790"
     assert file_metadata.path == text_file
     assert (
         file_metadata.path_with_checksum
-        == text_file.parent / f"{text_file.stem}.f8a5e764340d6f3e.txt"
+        == text_file.parent / f"{text_file.stem}.0cc84ab57c476d2385b899ca742a2790.txt"
     )
     assert file_metadata.size == 11
     histogram_image_metadata = file_metadata.histogram_image_metadata
@@ -250,11 +245,12 @@ def test_metadata_factory_grayscale_image():
     assert image_metadata.width == 1018
     file_metadata = composite_metadata.get(FileMetadata)
     assert isinstance(file_metadata, FileMetadata)
-    assert file_metadata.checksum == "94cc2cbc92ef3c0f"
+    assert file_metadata.checksum == "ff6a4ce58da125c968e0eb74d64160dc"
     assert file_metadata.path == GRAYSCALE_IMAGE
     assert (
         file_metadata.path_with_checksum
-        == GRAYSCALE_IMAGE.parent / f"{GRAYSCALE_IMAGE.stem}.94cc2cbc92ef3c0f.jpg"
+        == GRAYSCALE_IMAGE.parent
+        / f"{GRAYSCALE_IMAGE.stem}.ff6a4ce58da125c968e0eb74d64160dc.jpg"
     )
     assert file_metadata.size == 127620
     histogram_image_metadata = file_metadata.histogram_image_metadata
@@ -320,10 +316,11 @@ def test_metadata_factory_colour_image_file():
     assert image_metadata.width == 1187
     file_metadata = composite_metadata.get(FileMetadata)
     assert isinstance(file_metadata, FileMetadata)
-    assert file_metadata.checksum == "139f194152e9346c"
+    assert file_metadata.checksum == "fc3649e778f180bb3c13f85c3710cc62"
     assert (
         file_metadata.path_with_checksum
-        == COLOUR_IMAGE.parent / f"{COLOUR_IMAGE.stem}.139f194152e9346c.png"
+        == COLOUR_IMAGE.parent
+        / f"{COLOUR_IMAGE.stem}.fc3649e778f180bb3c13f85c3710cc62.png"
     )
     assert file_metadata.size == 19845
     histogram_image_metadata = file_metadata.histogram_image_metadata
@@ -365,11 +362,11 @@ def test_audio_file_metadata_factory():
     assert audio_file_metadata.duration == around(5.0)
     assert audio_file_metadata.entropy == around(1.9632340669631958)
     file_metadata = composite_metadata.get(FileMetadata)
-    assert file_metadata.checksum == "b5ea61b9156ad53c"
+    assert file_metadata.checksum == "cce974fae4db6a85015d4d71684847cd"
     assert file_metadata.path == AUDIO_FILE
     assert (
         file_metadata.path_with_checksum
-        == AUDIO_FILE.parent / f"{AUDIO_FILE.stem}.b5ea61b9156ad53c.mp3"
+        == AUDIO_FILE.parent / f"{AUDIO_FILE.stem}.cce974fae4db6a85015d4d71684847cd.mp3"
     )
     assert file_metadata.size == 80666
     histogram_image_metadata = file_metadata.histogram_image_metadata
@@ -413,11 +410,12 @@ def test_video_file_metadata_factory_movie():
     assert metadata.width == 352
     assert metadata.height == 288
     file_metadata = composite_metadata.get(FileMetadata)
-    assert file_metadata.checksum == "2fcdd282ae3b95b6"
+    assert file_metadata.checksum == "af8b3d993439c694cc7bd52dfaca1183"
     assert file_metadata.path == VIDEO_FILE_MOVIE
     assert (
         file_metadata.path_with_checksum
-        == VIDEO_FILE_MOVIE.parent / f"{VIDEO_FILE_MOVIE.stem}.2fcdd282ae3b95b6.mpg"
+        == VIDEO_FILE_MOVIE.parent
+        / f"{VIDEO_FILE_MOVIE.stem}.af8b3d993439c694cc7bd52dfaca1183.mpg"
     )
     assert file_metadata.size == 2026528
     histogram_image_metadata = file_metadata.histogram_image_metadata
@@ -465,11 +463,11 @@ def test_video_file_metadata_factory_animation():
     assert metadata.width == 190
     assert metadata.height == 240
     file_metadata = composite_metadata.get(FileMetadata)
-    assert file_metadata.checksum == "7f8ad742f2d4c988"
+    assert file_metadata.checksum == "f664036f4e48430959ecd887194629f0"
     assert (
         file_metadata.path_with_checksum
         == VIDEO_FILE_ANIMATION.parent
-        / f"{VIDEO_FILE_ANIMATION.stem}.7f8ad742f2d4c988.mp4"
+        / f"{VIDEO_FILE_ANIMATION.stem}.f664036f4e48430959ecd887194629f0.mp4"
     )
     assert file_metadata.size == 245779
     histogram_image_metadata = file_metadata.histogram_image_metadata

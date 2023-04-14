@@ -1,8 +1,8 @@
-import struct
 from base64 import b64decode
+from hashlib import blake2b
 from io import BytesIO
 from pathlib import Path
-from typing import Optional
+from typing import TypedDict
 
 import PIL.Image
 import numpy as np
@@ -11,17 +11,27 @@ from PIL import ImageFilter, ImageStat
 from scipy.ndimage import convolve
 from scipy.signal import convolve2d
 from scipy.stats import skew, kurtosis
+from typing_extensions import NotRequired, Unpack
 
 import fracdim
-from adapter import ImageAdapter, Digest, NullDigest
+from adapter import ImageAdapter, Digest
 
 
 class DefaultImageAdapter(ImageAdapter):
+    class Arguments(TypedDict):
+        digest: NotRequired[Digest]
+
+    def __init__(self, **kwargs: Unpack[Arguments]):
+        kwargs = self.Arguments(**kwargs)
+        self._digest = (
+            kwargs["digest"] if "digest" in kwargs else blake2b(digest_size=16)
+        )
+
     def load(self, file_path: Path) -> Image:
         return PIL.Image.open(file_path)
 
-    def histogram(self, file_path: Path, digest: Optional[Digest] = None) -> Image:
-        digest = digest if digest is not None else NullDigest()
+    def histogram(self, file_path: Path) -> tuple[Image, str]:
+        digest = self._digest.copy()
         hist = np.zeros((256, 256), dtype=np.uint8)
         with file_path.open("rb") as f:
             while chunk := f.read(32 * 1024 * 1024):
@@ -38,10 +48,7 @@ class DefaultImageAdapter(ImageAdapter):
         ).transpose((1, 2, 0))
 
         histogram_image = PIL.Image.fromarray(rgb_hist, "RGB")
-        digest.update(self._to_bytes(histogram_image))
-        entropy = histogram_image.entropy()
-        digest.update(struct.pack("<f", entropy))
-        return histogram_image
+        return histogram_image, digest.hexdigest()
 
     def thumbnail(self, source: Image) -> Image:
         thumbnail_image: PIL.Image = source.convert(mode="RGB").resize(
@@ -229,6 +236,11 @@ class DefaultImageAdapter(ImageAdapter):
     def from_data_url(self, data_url: str) -> Image:
         image_data = b64decode(data_url.split(",")[1])
         return Image.open(BytesIO(image_data))
+
+    def checksum(self, image: Image) -> str:
+        digest = self._digest.copy()
+        digest.update(image.tobytes())
+        return digest.hexdigest()
 
     @staticmethod
     def _to_bytes(image: Image) -> bytes:

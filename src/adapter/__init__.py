@@ -26,6 +26,9 @@ class Digest(Protocol):
     def hexdigest(self) -> str:
         ...
 
+    def copy(self) -> "Digest":
+        ...
+
 
 class ImageAdapter(Protocol):
     def load(self, file_path: Path) -> Image:
@@ -34,7 +37,7 @@ class ImageAdapter(Protocol):
     def to_grayscale(self, image: Image) -> Image:
         ...
 
-    def histogram(self, file_path: Path, digest: Digest) -> Image:
+    def histogram(self, file_path: Path) -> tuple[Image, str]:
         ...
 
     def rgb_histogram(self, image: Image) -> list[int]:
@@ -80,6 +83,9 @@ class ImageAdapter(Protocol):
         ...
 
     def from_data_url(self, data_url: str) -> Image:
+        ...
+
+    def checksum(self, image: Image) -> str:
         ...
 
 

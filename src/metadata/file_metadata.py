@@ -1,5 +1,4 @@
 from functools import cached_property
-from hashlib import blake2b
 from pathlib import Path
 from typing import TypedDict, Type, Iterable, TypeVar
 
@@ -7,7 +6,6 @@ from typing_extensions import Unpack, NotRequired
 
 from adapter import (
     ImageAdapter,
-    Digest,
     AudioAdapter,
     FileTypeAdapter,
     VideoAdapter,
@@ -23,10 +21,9 @@ from .video_metadata import VideoFileMetadata
 
 
 class FileMetadata(Metadata):
-    def __init__(self, path, image_adapter: ImageAdapter, digest: Digest):
+    def __init__(self, path, image_adapter: ImageAdapter):
         self._image_adapter = image_adapter
         self._path = path
-        self._digest = digest
         self._compute_metadata()
 
     @property
@@ -52,8 +49,7 @@ class FileMetadata(Metadata):
         Creates fields: _byte_size, _checksum, _histogram_image_metadata
         """
         self._byte_size = self.path.stat().st_size
-        histogram_image = self._image_adapter.histogram(self.path, self._digest)
-        self._checksum = self._digest.hexdigest()
+        histogram_image, self._checksum = self._image_adapter.histogram(self.path)
         self._histogram_image_metadata = ImageMetadata(
             image=histogram_image,
             image_adapter=self._image_adapter,
@@ -96,17 +92,16 @@ class CompositeMetadata(Metadata):
 
 class FileMetadataFactory:
     class Arguments(TypedDict):
-        digest: NotRequired[Digest]
         image_adapter: NotRequired[ImageAdapter]
         audio_adapter: NotRequired[AudioAdapter]
         file_type_adapter: NotRequired[FileTypeAdapter]
         video_adapter: NotRequired[VideoAdapter]
 
     def __init__(self, **kwargs: Unpack[Arguments]):
+        kwargs = self.Arguments(**kwargs)
         self._file_type_adapter = kwargs.get(
             "file_type_adapter", DefaultFileTypeAdapter()
         )
-        self._digest = kwargs.get("digest", blake2b(digest_size=8))
         self._image_adapter = (
             kwargs["image_adapter"]
             if "image_adapter" in kwargs
@@ -125,7 +120,7 @@ class FileMetadataFactory:
 
     def create_metadata(self, path: Path) -> CompositeMetadata:
         metadata = CompositeMetadata()
-        metadata.add(FileMetadata(path, self._image_adapter, self._digest))
+        metadata.add(FileMetadata(path, self._image_adapter))
         if self._file_type_adapter.is_image(path):
             metadata.add(ImageFileMetadata(path, self._image_adapter))
         if self._file_type_adapter.is_audio(path):

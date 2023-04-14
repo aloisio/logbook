@@ -1,6 +1,8 @@
 from base64 import b64encode
+from hashlib import blake2b
 from io import BytesIO
 from pathlib import Path
+from unittest.mock import patch
 
 from PIL import Image as PILImage
 from pytest import approx
@@ -56,6 +58,28 @@ def test_default_image_adapter():
     image = adapter.load(GRAYSCALE_IMAGE)
     assert image.width == 1018
     assert image.height == 821
+
+
+def test_default_image_adapter_checksum_default_digest():
+    with patch(
+        f"{DefaultImageAdapter.__module__}.{blake2b.__name__}"
+    ) as mock_digest_creator:
+        _ = DefaultImageAdapter()
+        mock_digest_creator.assert_called_once_with(digest_size=16)
+
+
+def test_default_image_adapter_checksum_custom_digest():
+    def one_time_hash(image: Image):
+        return blake2b(image.tobytes(), digest_size=4).hexdigest()
+
+    empty_image = PILImage.new("RGB", (0, 0))
+    adapter = DefaultImageAdapter(digest=blake2b(digest_size=4))
+    checksum = adapter.checksum(empty_image)
+    assert checksum == one_time_hash(empty_image)
+    one_pixel_image = PILImage.new("RGB", (1, 1))
+    one_pixel_image.putpixel((0, 0), (255, 0, 0))
+    checksum = adapter.checksum(one_pixel_image)
+    assert checksum == one_time_hash(one_pixel_image)
 
 
 def test_default_file_type_adapter_image():
