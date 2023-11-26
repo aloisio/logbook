@@ -58,11 +58,7 @@ class Presenter(Protocol):
 
 class Digester(Protocol):
     @property
-    def valid_chars(self) -> str:
-        return ...
-
-    @property
-    def length(self) -> int:
+    def checksum_regex(self) -> str:
         return ...
 
     def compute_digest(self, file: Path) -> Checksum:
@@ -70,13 +66,11 @@ class Digester(Protocol):
 
 
 class QuarterSha256Base36Digester(Digester):
-    @property
-    def valid_chars(self) -> str:
-        return "0-9a-z"
+    LENGTH = 13
 
     @property
-    def length(self) -> int:
-        return 13
+    def checksum_regex(self) -> str:
+        return rf"[0-3][0-9a-z]{{{self.LENGTH-1}}}"
 
     def compute_digest(self, file: Path) -> Checksum:
         # Create an instance of the SHA256 hash algorithm
@@ -96,7 +90,7 @@ class QuarterSha256Base36Digester(Digester):
             digest[0 : len(digest) // 4], byteorder="big", signed=False
         )
         # Convert the decimal number to base-36, left-zero fill
-        checksum = self.base_36(decimal_number).zfill(self.length)
+        checksum = self.base_36(decimal_number).zfill(self.LENGTH)
 
         return Checksum(file, checksum)
 
@@ -131,9 +125,7 @@ class ChecksumRepository(Protocol):
 class FileRenamer(ChecksumRepository):
     def __init__(self, digester: Digester):
         self.checksum_pattern = re.compile(
-            r"^(?P<prefix>.*?)\."
-            rf"(?P<checksum>[{digester.valid_chars}]{{{digester.length}}})"
-            r"(?P<suffix>\..*)?$",
+            rf"^(?P<prefix>.*?)\.(?P<checksum>{digester.checksum_regex})(?P<suffix>\..*)?$",
             re.IGNORECASE,
         )
 

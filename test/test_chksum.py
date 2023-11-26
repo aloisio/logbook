@@ -15,11 +15,11 @@ from chksum import (
 
 
 def test_file_renamer_delete_rename_file_with_checksum_in_stem(tmp_path, renamer):
-    original_file = tmp_path / "example.abcd1234efgh5.txt"
+    original_file = tmp_path / "example.1acceleration.txt"
     original_file.touch()
     assert renamer.has_checksum(original_file)
     original_checksum = renamer.checksum(original_file)
-    assert str(original_checksum) == "abcd1234efgh5"
+    assert str(original_checksum) == "1acceleration"
 
     renamer.delete_checksum(original_checksum)
     file_without_checksum = tmp_path / "example.txt"
@@ -29,13 +29,13 @@ def test_file_renamer_delete_rename_file_with_checksum_in_stem(tmp_path, renamer
 
 
 def test_file_renamer_write_do_not_rename_file_with_checksum_in_stem(tmp_path, renamer):
-    original_file = tmp_path / "example.abcd1234efgh5.txt"
+    original_file = tmp_path / "example.1acceleration.txt"
     original_file.touch()
     assert renamer.has_checksum(original_file)
     original_checksum = renamer.checksum(original_file)
-    assert str(original_checksum) == "abcd1234efgh5"
+    assert str(original_checksum) == "1acceleration"
 
-    renamer.write_checksum(Checksum(original_file, "newchecksum01"))
+    renamer.write_checksum(Checksum(original_file, "2professional"))
     assert original_file.exists()
     assert_one_file(tmp_path)
 
@@ -45,8 +45,8 @@ def test_file_renamer_write_rename_file_without_checksum_in_stem(tmp_path, renam
     original_file.touch()
     assert not renamer.has_checksum(original_file)
 
-    renamer.write_checksum(Checksum(original_file, "newchecksum01"))
-    renamed_file = tmp_path / "example.newchecksum01.txt"
+    renamer.write_checksum(Checksum(original_file, "2professional"))
+    renamed_file = tmp_path / "example.2professional.txt"
     assert renamed_file.exists()
     assert_one_file(tmp_path)
 
@@ -58,7 +58,7 @@ def test_file_renamer_delete_do_not_rename_file_without_checksum_in_stem(
     original_file.touch()
     assert not renamer.has_checksum(original_file)
 
-    renamer.delete_checksum(Checksum(original_file, "newchecksum01"))
+    renamer.delete_checksum(Checksum(original_file, "2professional"))
     assert original_file.exists()
     assert_one_file(tmp_path)
 
@@ -70,8 +70,8 @@ def test_file_renamer_write_rename_file_without_extension_without_checksum_in_su
     original_file.touch()
     assert not renamer.has_checksum(original_file)
 
-    renamer.write_checksum(Checksum(original_file, "newchecksum01"))
-    renamed_file = tmp_path / "md5.newchecksum01"
+    renamer.write_checksum(Checksum(original_file, "2professional"))
+    renamed_file = tmp_path / "md5.2professional"
     assert renamed_file.exists()
     assert_one_file(tmp_path)
 
@@ -83,7 +83,7 @@ def test_file_renamer_delete_do_not_rename_file_without_extension_without_checks
     original_file.touch()
     assert not renamer.has_checksum(original_file)
 
-    renamer.delete_checksum(Checksum(original_file, "newchecksum01"))
+    renamer.delete_checksum(Checksum(original_file, "2professional"))
     assert original_file.exists()
     assert_one_file(tmp_path)
 
@@ -91,11 +91,11 @@ def test_file_renamer_delete_do_not_rename_file_without_extension_without_checks
 def test_file_renamer_delete_rename_file_without_extension_with_checksum_in_suffix(
     tmp_path, renamer
 ):
-    original_file = tmp_path / "md5.abcd1234efgh5"
+    original_file = tmp_path / "md5.1acceleration"
     original_file.touch()
     assert renamer.has_checksum(original_file)
     original_checksum = renamer.checksum(original_file)
-    assert str(original_checksum) == "abcd1234efgh5"
+    assert str(original_checksum) == "1acceleration"
 
     renamer.delete_checksum(original_checksum)
     file_without_checksum = tmp_path / "md5"
@@ -107,13 +107,13 @@ def test_file_renamer_delete_rename_file_without_extension_with_checksum_in_suff
 def test_file_renamer_write_do_not_rename_file_without_extension_with_checksum_in_suffix(
     tmp_path, renamer
 ):
-    original_file = tmp_path / "md5.abcd1234efgh5"
+    original_file = tmp_path / "md5.1acceleration"
     original_file.touch()
     assert renamer.has_checksum(original_file)
     original_checksum = renamer.checksum(original_file)
-    assert str(original_checksum) == "abcd1234efgh5"
+    assert str(original_checksum) == "1acceleration"
 
-    renamer.write_checksum(Checksum(original_file, "newchecksum01"))
+    renamer.write_checksum(Checksum(original_file, "2professional"))
     assert original_file.exists()
     assert_one_file(tmp_path)
 
@@ -125,8 +125,8 @@ def test_file_renamer_write_rename_file_name_is_suffix_without_checksum(
     original_file.touch()
     assert not renamer.has_checksum(original_file)
 
-    renamer.write_checksum(Checksum(original_file, "newchecksum01"))
-    renamed_file = tmp_path / ".dat.newchecksum01"
+    renamer.write_checksum(Checksum(original_file, "2professional"))
+    renamed_file = tmp_path / ".dat.2professional"
     assert renamed_file.exists()
     assert_one_file(tmp_path)
 
@@ -134,7 +134,7 @@ def test_file_renamer_write_rename_file_name_is_suffix_without_checksum(
 def test_file_renamer_delete_rename_file_name_is_suffix_with_checksum(
     tmp_path, renamer
 ):
-    original_file = tmp_path / ".dat.abcd1234efgh5"
+    original_file = tmp_path / ".dat.1acceleration"
     original_file.touch()
     assert renamer.has_checksum(original_file)
     original_checksum = renamer.checksum(original_file)
@@ -148,12 +148,12 @@ def test_file_renamer_delete_rename_file_name_is_suffix_with_checksum(
 def test_file_renamer_write_do_not_rename_file_name_is_suffix_same_size_as_checksum(
     tmp_path, renamer
 ):
-    original_file = tmp_path / ".factorization"
+    original_file = tmp_path / ".0intelligence"
     original_file.touch()
     assert renamer.has_checksum(original_file)
-    assert str(renamer.checksum(original_file)) == "factorization"
+    assert str(renamer.checksum(original_file)) == "0intelligence"
 
-    renamer.write_checksum(Checksum(original_file, "newchecksum01"))
+    renamer.write_checksum(Checksum(original_file, "2professional"))
     assert original_file.exists()
     assert_one_file(tmp_path)
 
@@ -161,11 +161,11 @@ def test_file_renamer_write_do_not_rename_file_name_is_suffix_same_size_as_check
 def test_file_renamer_delete_do_not_rename_file_name_is_suffix_same_size_as_checksum(
     tmp_path, renamer
 ):
-    original_file = tmp_path / ".factorization"
+    original_file = tmp_path / ".0intelligence"
     original_file.touch()
     assert renamer.has_checksum(original_file)
     original_checksum = renamer.checksum(original_file)
-    assert str(original_checksum) == "factorization"
+    assert str(original_checksum) == "0intelligence"
 
     renamer.delete_checksum(original_checksum)
     assert original_file.exists()
