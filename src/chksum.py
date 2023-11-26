@@ -11,9 +11,6 @@ from functools import cached_property
 from pathlib import Path
 from typing import TypedDict, Protocol, cast, Generator, Callable, Optional
 
-import numpy as np
-from typing_extensions import Unpack
-
 
 @dataclass
 class Checksum:
@@ -94,19 +91,27 @@ class QuarterSha256Base36Digester(Digester):
 
         # Obtain the digest or hash value
         digest = hash_algorithm.digest()
-
         # Convert the first quarter of the digest to a decimal number
         decimal_number = int.from_bytes(
             digest[0 : len(digest) // 4], byteorder="big", signed=False
         )
-
-        # Convert the decimal number to base-36 representation using NumPy
-        base36_number = np.base_repr(decimal_number, 36)
-
-        # Left-zero fill the base-36 number
-        checksum = base36_number.zfill(self.length).lower()
+        # Convert the decimal number to base-36, left-zero fill
+        checksum = self.base_36(decimal_number).zfill(self.length)
 
         return Checksum(file, checksum)
+
+    @staticmethod
+    def base_36(number) -> str:
+        digits = "0123456789abcdefghijklmnopqrstuvwxyz"
+
+        num = abs(number)
+        res = []
+        while num:
+            res.append(digits[num % 36])
+            num //= 36
+        if number < 0:
+            res.append("-")
+        return "".join(reversed(res or "0"))
 
 
 class ChecksumRepository(Protocol):
@@ -199,7 +204,7 @@ class CommandArgs(CommandRequest):
 
 
 class Command(ABC):
-    def __init__(self, **kwargs: Unpack[CommandArgs]):
+    def __init__(self, **kwargs):
         kwargs = cast(CommandArgs, kwargs)
         self.presenter = kwargs["presenter"]
         self.repository = kwargs["repository"]
@@ -221,9 +226,8 @@ class Command(ABC):
 
 
 class CommandFactory:
-    def __init__(
-        self, /, input_handler: InputHandler, **command_args: Unpack[CommandArgs]
-    ):
+    def __init__(self, /, input_handler: InputHandler, **command_args):
+        command_args = cast(CommandArgs, command_args)
         self.command_args = command_args
         self.calculator = command_args["calculator"]
         self.repository = command_args["repository"]
