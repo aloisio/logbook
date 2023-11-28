@@ -1,5 +1,4 @@
 from pathlib import Path
-from typing import cast
 
 import pytest
 
@@ -12,10 +11,6 @@ from chksum import (
     Presenter,
     ChecksumCalculator,
     ProcessPoolChecksumCalculator,
-    CommandFactory,
-    InputHandler,
-    Digester,
-    CommandRequest,
 )
 
 EMPTY_FILE_CHECKSUM = "3gng7kheu33tg"
@@ -240,21 +235,6 @@ def test_process_pool_calculator(tmp_path):
 
     # Assert the results based on known input and expected output
     assert results == [Checksum(path, EMPTY_FILE_CHECKSUM)]
-
-
-def test_command_factory(mocker):
-    mock_repository = mocker.Mock(spec=ChecksumRepository)
-    mock_input = mocker.Mock(spec=InputHandler)
-    mock_input.command_request.return_value = CommandRequest(
-        files=[Path("A"), Path("B")], check=False, write=False, delete=False
-    )
-    CommandFactory(
-        input_handler=mock_input,
-        digester=mocker.Mock(spec=Digester),
-        presenter=mocker.Mock(spec=Presenter),
-        repository=mock_repository,
-        calculator=mocker.Mock(spec=ChecksumCalculator),
-    ).create()
 
 
 def assert_one_file(tmp_path):
