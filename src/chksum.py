@@ -125,21 +125,25 @@ class ChecksumRepository(Protocol):
 class FileRenamer(ChecksumRepository):
     def __init__(self, digester: Digester):
         self.checksum_pattern = re.compile(
-            rf"^(?P<prefix>.*?)\.(?P<checksum>{digester.checksum_regex})(?P<suffix>\..*)?$",
+            rf"^(?P<prefix>.+?)(?:\.(?P<checksum>{digester.checksum_regex}))?(?P<suffix>\.[^.]+)$",
             re.IGNORECASE,
         )
 
     def has_checksum(self, file: Path) -> bool:
-        return bool(self.checksum_pattern.fullmatch(file.name))
+        return bool(match := self.checksum_pattern.fullmatch(file.name)) and bool(
+            match.group("checksum")
+        )
 
     def checksum(self, file: Path) -> Checksum:
-        if match := self.checksum_pattern.fullmatch(file.name):
-            return Checksum(file, match.group("checksum").lower())
+        if (match := self.checksum_pattern.fullmatch(file.name)) and (
+            checksum := match.group("checksum")
+        ):
+            return Checksum(file, checksum.lower())
         raise ValueError(f"No checksum: {file}")
 
     def write_checksum(self, checksum: Checksum) -> Checksum:
         file = checksum.path
-        if not self.has_checksum(file):
+        if not self.has_checksum(file) and self._can_have_checksum(file):
             new_path = file.parent / f"{file.stem}.{checksum}{file.suffix}"
             file.rename(new_path)
             return Checksum(new_path, checksum.value)
@@ -154,6 +158,9 @@ class FileRenamer(ChecksumRepository):
                 file.rename(new_path)
                 return Checksum(new_path, checksum.value)
         return checksum
+
+    def _can_have_checksum(self, file: Path) -> bool:
+        return bool(self.checksum_pattern.fullmatch(file.name))
 
 
 class ConsolePresenter(Presenter):
@@ -304,13 +311,13 @@ class DeleteCommand(Command):
 
     def _delete_checksum(self, checksum):
         expected_checksum = self.repository.checksum(checksum.path)
-        if checksum == expected_checksum:
-            try:
-                self.presenter.deleted(self.repository.delete_checksum(checksum))
-            except Exception:
+        try:
+            self.presenter.deleted(self.repository.delete_checksum(checksum))
+        except Exception:
+            if checksum == expected_checksum:
                 self.presenter.ok(checksum)
-        else:
-            self.presenter.fail(checksum)
+            else:
+                self.presenter.fail(checksum)
 
 
 class ProcessPoolChecksumCalculator(ChecksumCalculator):

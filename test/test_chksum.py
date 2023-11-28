@@ -13,172 +13,144 @@ from chksum import (
     ProcessPoolChecksumCalculator,
 )
 
+EMPTY_FILE_CHECKSUM = "3gng7kheu33tg"
 
-def test_file_renamer_delete_rename_file_with_checksum_in_stem(tmp_path, renamer):
+
+def test_file_renamer_has_checksum_locked_file(tmp_path, renamer):
+    names = [
+        "example.1acceleration.txt",
+        "example.0intelligence.mp4.1acceleration.jpg",
+        "example.0intelligence.mp4.1acceleration.2professional",
+    ]
+    for name in names:
+        file = tmp_path / name
+        file.touch()
+        assert renamer.has_checksum(file)
+        assert renamer.checksum(file).value == "1acceleration"
+
+
+def test_file_renamer_has_checksum_unlocked_file(tmp_path, renamer):
+    names = [
+        "example.txt",
+        "example.0intelligence.mp4.jpg",
+        "example.0intelligence.mp4.1acceleration",
+        ".1acceleration",
+        ".foobar",
+        "example",
+        "1acceleration",
+    ]
+    for name in names:
+        file = tmp_path / name
+        file.touch()
+        assert not renamer.has_checksum(file), name
+        with pytest.raises(ValueError):
+            renamer.checksum(file)
+
+
+def test_file_renamer_delete_locked_file(tmp_path, renamer):
+    names = ["example.1acceleration.txt", f"example.{EMPTY_FILE_CHECKSUM}.txt"]
+    for name in names:
+        original_file = tmp_path / name
+        original_file.touch()
+        assert renamer.has_checksum(original_file)
+        original_checksum = renamer.checksum(original_file)
+        assert str(original_checksum) in ["1acceleration", EMPTY_FILE_CHECKSUM]
+
+        renamer.delete_checksum(original_checksum)
+        file_without_checksum = tmp_path / "example.txt"
+        assert file_without_checksum.exists()
+        assert_one_file(tmp_path)
+        assert not renamer.has_checksum(file_without_checksum)
+
+
+def test_file_renamer_write_locked_file_does_nothing(tmp_path, renamer):
     original_file = tmp_path / "example.1acceleration.txt"
     original_file.touch()
     assert renamer.has_checksum(original_file)
     original_checksum = renamer.checksum(original_file)
     assert str(original_checksum) == "1acceleration"
 
-    renamer.delete_checksum(original_checksum)
-    file_without_checksum = tmp_path / "example.txt"
-    assert file_without_checksum.exists()
-    assert_one_file(tmp_path)
-    assert not renamer.has_checksum(file_without_checksum)
-
-
-def test_file_renamer_write_do_not_rename_file_with_checksum_in_stem(tmp_path, renamer):
-    original_file = tmp_path / "example.1acceleration.txt"
-    original_file.touch()
-    assert renamer.has_checksum(original_file)
-    original_checksum = renamer.checksum(original_file)
-    assert str(original_checksum) == "1acceleration"
-
     renamer.write_checksum(Checksum(original_file, "2professional"))
     assert original_file.exists()
     assert_one_file(tmp_path)
 
 
-def test_file_renamer_write_rename_file_without_checksum_in_stem(tmp_path, renamer):
-    original_file = tmp_path / "example.txt"
-    original_file.touch()
-    assert not renamer.has_checksum(original_file)
+def test_file_renamer_write_unlocked_file(tmp_path, renamer):
+    expectations = {
+        "example.txt": "example.2professional.txt",
+        "md5.1acceleration": "md5.2professional.1acceleration",
+    }
+    for original_name, expected_name in expectations.items():
+        original_file = tmp_path / original_name
+        original_file.touch()
+        assert not renamer.has_checksum(original_file)
 
-    renamer.write_checksum(Checksum(original_file, "2professional"))
-    renamed_file = tmp_path / "example.2professional.txt"
-    assert renamed_file.exists()
-    assert_one_file(tmp_path)
-
-
-def test_file_renamer_delete_do_not_rename_file_without_checksum_in_stem(
-    tmp_path, renamer
-):
-    original_file = tmp_path / "example.txt"
-    original_file.touch()
-    assert not renamer.has_checksum(original_file)
-
-    renamer.delete_checksum(Checksum(original_file, "2professional"))
-    assert original_file.exists()
-    assert_one_file(tmp_path)
+        renamer.write_checksum(Checksum(original_file, "2professional"))
+        renamed_file = tmp_path / expected_name
+        assert renamed_file.exists()
+        assert_one_file(tmp_path)
+        renamed_file.unlink()
 
 
-def test_file_renamer_write_rename_file_without_extension_without_checksum_in_suffix(
-    tmp_path, renamer
-):
-    original_file = tmp_path / "md5"
-    original_file.touch()
-    assert not renamer.has_checksum(original_file)
+def test_file_renamer_delete_unlocked_file_does_nothing(tmp_path, renamer):
+    names = ["example.txt", "md5.1acceleration", ".dat.1acceleration"]
+    for name in names:
+        original_file = tmp_path / name
+        original_file.touch()
+        assert not renamer.has_checksum(original_file)
 
-    renamer.write_checksum(Checksum(original_file, "2professional"))
-    renamed_file = tmp_path / "md5.2professional"
-    assert renamed_file.exists()
-    assert_one_file(tmp_path)
-
-
-def test_file_renamer_delete_do_not_rename_file_without_extension_without_checksum_in_suffix(
-    tmp_path, renamer
-):
-    original_file = tmp_path / "md5"
-    original_file.touch()
-    assert not renamer.has_checksum(original_file)
-
-    renamer.delete_checksum(Checksum(original_file, "2professional"))
-    assert original_file.exists()
-    assert_one_file(tmp_path)
+        renamer.delete_checksum(Checksum(original_file, "2professional"))
+        assert original_file.exists()
+        assert_one_file(tmp_path)
+        original_file.unlink()
 
 
-def test_file_renamer_delete_rename_file_without_extension_with_checksum_in_suffix(
-    tmp_path, renamer
-):
-    original_file = tmp_path / "md5.1acceleration"
-    original_file.touch()
-    assert renamer.has_checksum(original_file)
-    original_checksum = renamer.checksum(original_file)
-    assert str(original_checksum) == "1acceleration"
+def test_file_renamer_write_unlockable_file_does_nothing(tmp_path, renamer):
+    names = [".0intelligence", "md5", ".dat"]
+    for name in names:
+        original_file = tmp_path / name
+        original_file.touch()
+        assert not renamer.has_checksum(original_file)
 
-    renamer.delete_checksum(original_checksum)
-    file_without_checksum = tmp_path / "md5"
-    assert file_without_checksum.exists()
-    assert_one_file(tmp_path)
-    assert not renamer.has_checksum(file_without_checksum)
+        renamer.write_checksum(Checksum(original_file, "2professional"))
+        assert original_file.exists()
+        assert_one_file(tmp_path)
+        original_file.unlink()
 
 
-def test_file_renamer_write_do_not_rename_file_without_extension_with_checksum_in_suffix(
-    tmp_path, renamer
-):
-    original_file = tmp_path / "md5.1acceleration"
-    original_file.touch()
-    assert renamer.has_checksum(original_file)
-    original_checksum = renamer.checksum(original_file)
-    assert str(original_checksum) == "1acceleration"
+def test_file_renamer_delete_unlockable_file_does_nothing(tmp_path, renamer):
+    names = [".0intelligence", "md5", ".dat"]
+    for name in names:
+        original_file = tmp_path / name
+        original_file.touch()
+        assert not renamer.has_checksum(original_file)
 
-    renamer.write_checksum(Checksum(original_file, "2professional"))
-    assert original_file.exists()
-    assert_one_file(tmp_path)
-
-
-def test_file_renamer_write_rename_file_name_is_suffix_without_checksum(
-    tmp_path, renamer
-):
-    original_file = tmp_path / ".dat"
-    original_file.touch()
-    assert not renamer.has_checksum(original_file)
-
-    renamer.write_checksum(Checksum(original_file, "2professional"))
-    renamed_file = tmp_path / ".dat.2professional"
-    assert renamed_file.exists()
-    assert_one_file(tmp_path)
+        renamer.delete_checksum(Checksum(original_file, "2professional"))
+        assert original_file.exists()
+        assert_one_file(tmp_path)
+        original_file.unlink()
 
 
-def test_file_renamer_delete_rename_file_name_is_suffix_with_checksum(
-    tmp_path, renamer
-):
-    original_file = tmp_path / ".dat.1acceleration"
-    original_file.touch()
-    assert renamer.has_checksum(original_file)
-    original_checksum = renamer.checksum(original_file)
-
-    renamer.delete_checksum(original_checksum)
-    renamed_file = tmp_path / ".dat"
-    assert renamed_file.exists()
-    assert_one_file(tmp_path)
-
-
-def test_file_renamer_write_do_not_rename_file_name_is_suffix_same_size_as_checksum(
-    tmp_path, renamer
-):
-    original_file = tmp_path / ".0intelligence"
-    original_file.touch()
-    assert renamer.has_checksum(original_file)
-    assert str(renamer.checksum(original_file)) == "0intelligence"
-
-    renamer.write_checksum(Checksum(original_file, "2professional"))
-    assert original_file.exists()
-    assert_one_file(tmp_path)
-
-
-def test_file_renamer_delete_do_not_rename_file_name_is_suffix_same_size_as_checksum(
-    tmp_path, renamer
-):
-    original_file = tmp_path / ".0intelligence"
-    original_file.touch()
-    assert renamer.has_checksum(original_file)
-    original_checksum = renamer.checksum(original_file)
-    assert str(original_checksum) == "0intelligence"
-
-    renamer.delete_checksum(original_checksum)
-    assert original_file.exists()
-    assert_one_file(tmp_path)
-
-
-def test_file_renamer_checksum_fail_for_file_without_checksum(tmp_path, renamer):
+def test_file_renamer_checksum_unlocked_file_fails(tmp_path, renamer):
     original_file = tmp_path / "example.txt"
     original_file.touch()
     assert not renamer.has_checksum(original_file)
 
     with pytest.raises(Exception):
         _ = renamer.checksum(original_file)
+
+
+def test_file_renamer_checksum_locked_file_multiple_checksums(tmp_path, renamer):
+    names = [
+        "example.mp4.1acceleration.2professional.jpg",
+        "example.0intelligence.mp4.1acceleration.2professional.jpg",
+        ".0intelligence.2professional.1acceleration",
+    ]
+    for name in names:
+        original_file = tmp_path / name
+        original_file.touch()
+        assert renamer.has_checksum(original_file)
+        assert renamer.checksum(original_file).value == "2professional"
 
 
 def test_check_command_correct_checksum(
@@ -262,7 +234,7 @@ def test_process_pool_calculator(tmp_path):
     results = list(calculator.compute_checksums([path]))
 
     # Assert the results based on known input and expected output
-    assert results == [Checksum(path, "3gng7kheu33tg")]
+    assert results == [Checksum(path, EMPTY_FILE_CHECKSUM)]
 
 
 def assert_one_file(tmp_path):

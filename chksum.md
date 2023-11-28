@@ -88,13 +88,14 @@ classDiagram
 stateDiagram
   direction LR
 
-  NoChecksum --> NoChecksum : Check, Delete, Write F
-  NoChecksum --> ValidChecksum : Write S
-  ValidChecksum --> NoChecksum : Delete S
-  ValidChecksum --> ValidChecksum : Check, Delete F, Write
-  ValidChecksum --> InvalidChecksum : Check
-  InvalidChecksum --> ValidChecksum : Check
-  InvalidChecksum --> NoChecksum : Delete S
-  InvalidChecksum --> InvalidChecksum : Check, Delete F, Write F
-  InvalidChecksum --> ValidChecksum : Write S
+  Locked+Valid --> Locked+Valid : Check, Write F, Delete F
+  Locked+Valid --> Locked+Invalid : Check
+  Locked+Invalid --> Locked+Valid: Check
+  Locked+Invalid --> Locked+Valid : Write S
+  Locked+Invalid --> Locked+Invalid : Write F, Check
+  Unlocked --> Locked+Valid : Write S
+  Unlocked --> Unlocked : Write F, Check, Delete
+  Locked+Valid --> Unlocked : Delete S 
+  Locked+Invalid --> Unlocked : Delete S 
 ```
+
