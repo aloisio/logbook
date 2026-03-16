@@ -2,6 +2,7 @@ from pathlib import Path
 from typing import Protocol, TypedDict
 
 import magic
+import mimetypes
 from typing_extensions import Required
 
 from adapter.base_adapter import Image, Array
@@ -110,9 +111,11 @@ class DefaultFileTypeAdapter(FileTypeAdapter):
 
     @staticmethod
     def _is_in_category(path: Path, category: str) -> bool:
-        return (mime := magic.from_file(path, mime=True)) and mime.lower().startswith(
-            category
-        )
+        mime = magic.from_file(path, mime=True)
+        if mime and mime.lower().startswith(category):
+            return True
+        guessed_mime, _ = mimetypes.guess_type(path)
+        return guessed_mime is not None and guessed_mime.lower().startswith(category)
 
 
 class NullDigest(Digest):

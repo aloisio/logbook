@@ -22,8 +22,9 @@ class Checksum:
 
 
 class CommandRequest(TypedDict):
-    write: bool
+    check: bool
     delete: bool
+    write: bool
     files: list[Path]
 
 
@@ -125,21 +126,25 @@ class ChecksumRepository(Protocol):
 class FileRenamer(ChecksumRepository):
     def __init__(self, digester: Digester):
         self.checksum_pattern = re.compile(
-            rf"^(?P<prefix>.*?)\.(?P<checksum>{digester.checksum_regex})(?P<suffix>\..*)?$",
+            rf"^(?P<prefix>.+?)(?:\.(?P<checksum>{digester.checksum_regex}))?(?P<suffix>\.[^.]+)$",
             re.IGNORECASE,
         )
 
     def has_checksum(self, file: Path) -> bool:
-        return bool(self.checksum_pattern.fullmatch(file.name))
+        return bool(match := self.checksum_pattern.fullmatch(file.name)) and bool(
+            match.group("checksum")
+        )
 
     def checksum(self, file: Path) -> Checksum:
-        if match := self.checksum_pattern.fullmatch(file.name):
-            return Checksum(file, match.group("checksum").lower())
+        if (match := self.checksum_pattern.fullmatch(file.name)) and (
+            checksum := match.group("checksum")
+        ):
+            return Checksum(file, checksum.lower())
         raise ValueError(f"No checksum: {file}")
 
     def write_checksum(self, checksum: Checksum) -> Checksum:
         file = checksum.path
-        if not self.has_checksum(file):
+        if not self.has_checksum(file) and self._can_have_checksum(file):
             new_path = file.parent / f"{file.stem}.{checksum}{file.suffix}"
             file.rename(new_path)
             return Checksum(new_path, checksum.value)
@@ -154,6 +159,9 @@ class FileRenamer(ChecksumRepository):
                 file.rename(new_path)
                 return Checksum(new_path, checksum.value)
         return checksum
+
+    def _can_have_checksum(self, file: Path) -> bool:
+        return bool(self.checksum_pattern.fullmatch(file.name))
 
 
 class ConsolePresenter(Presenter):
@@ -231,13 +239,14 @@ class CommandFactory:
 
         request = self.input_handler.command_request()
         files = request["files"]
-        write_flag = request["write"]
+        check_flag = request["check"]
         delete_flag = request["delete"]
+        write_flag = request["write"]
         return [
             CheckCommand(
                 **self.command_args,
                 files=self._filter_files(
-                    files, self.repository.has_checksum, not delete_flag
+                    files, self.repository.has_checksum, check_flag and not delete_flag and not write_flag
                 ),
             ),
             DeleteCommand(
@@ -248,7 +257,11 @@ class CommandFactory:
             ),
             ComputeCommand(
                 **self.command_args,
-                files=self._filter_files(files, does_not_have_checksum, not write_flag),
+                files=self._filter_files(
+                    files,
+                    does_not_have_checksum,
+                    not check_flag and not delete_flag and not write_flag,
+                ),
             ),
             WriteCommand(
                 **self.command_args,
@@ -304,13 +317,13 @@ class DeleteCommand(Command):
 
     def _delete_checksum(self, checksum):
         expected_checksum = self.repository.checksum(checksum.path)
-        if checksum == expected_checksum:
-            try:
-                self.presenter.deleted(self.repository.delete_checksum(checksum))
-            except Exception:
+        try:
+            self.presenter.deleted(self.repository.delete_checksum(checksum))
+        except Exception:
+            if checksum == expected_checksum:
                 self.presenter.ok(checksum)
-        else:
-            self.presenter.fail(checksum)
+            else:
+                self.presenter.fail(checksum)
 
 
 class ProcessPoolChecksumCalculator(ChecksumCalculator):
@@ -332,6 +345,7 @@ class CommandLineInputHandler(InputHandler):
     def command_request(self) -> CommandRequest:
         return {
             "files": list(filter(None, self.args.files)),
+            "check": self.args.check,
             "write": self.args.write,
             "delete": self.args.delete,
         }
@@ -342,7 +356,13 @@ class CommandLineInputHandler(InputHandler):
             path = Path(arg)
             return path if path.exists() and path.is_file() else None
 
-        parser = ArgumentParser(description="Process a list of files.")
+        parser = ArgumentParser(description="Computes checksum for a list of files.")
+        parser.add_argument(
+            "-c",
+            "--check",
+            action="store_true",
+            help="check computed checksum matches recorded checksum",
+        )
         parser.add_argument(
             "-w",
             "--write",

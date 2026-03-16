@@ -529,7 +529,7 @@ class Logbook(Parsable):
                 self.result.add_error(self.context.path.parent, "Missing style.css")
             for root, dirs, files in walk(self.context.root):
                 for d in dirs:
-                    if d in {".git", ".hg"}:
+                    if d in {".git", ".hg", ".idea"}:
                         dirs.remove(d)
                         continue
                     if not next((dir_path := Path(root) / d).iterdir(), None):
@@ -823,7 +823,8 @@ class MarkdownParser:
             label = str(index).zfill(len(str(len(link_attributes))))
             link.meta["label"] = label
             env["references"][label] = cls.__attributes_as_dict(link)
-        return parser.renderer.render(tokens, parser.options, env)
+        normalized = parser.renderer.render(tokens, parser.options, env)
+        return normalized.replace(r"\[ \]", "[ ]").replace(r"\[x\]", "[x]")
 
     @classmethod
     def iterlinks(cls, markdown_path: Path) -> Generator[Token, None, None]:
@@ -839,10 +840,11 @@ class MarkdownParser:
     @staticmethod
     @lru_cache
     def markdown_to_markdown_parser():
-        parser = build_mdit(renderer_cls=MDRenderer, mdformat_opts={"number": True})
+        parser = build_mdit(renderer_cls=MDRenderer, mdformat_opts={"number": True, "wrap": 99})
         update_mdit(parser)
         parser.options["linkify"] = False
         parser.disable("linkify")
+        parser.disable("github-tasklists")
         return parser
 
     @staticmethod

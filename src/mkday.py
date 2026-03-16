@@ -23,7 +23,8 @@ def main(args: argparse.Namespace):
         rewrite_header_1(new_day.next.get("", None))
 
     old_logbook = Logbook(args.directory)
-    validate(old_logbook)
+    if not args.no_validate:
+        validate(old_logbook)
     # old_logbook.parse()
     if old_logbook.day(args.date) is None:
         Day(args.directory, args.date).save()
@@ -58,4 +59,5 @@ if __name__ == "__main__":
     parser.add_argument(
         "-d", "--date", type=datetime.date.fromisoformat, default=datetime.date.today()
     )
+    parser.add_argument("--no-validate", action="store_true", help="skip validation")
     main(parser.parse_args())

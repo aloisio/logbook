@@ -1,3 +1,4 @@
+from __future__ import annotations
 import datetime
 import re
 import shutil
@@ -8,6 +9,7 @@ from textwrap import dedent
 from typing import Callable
 
 import pytest
+from dataclasses import dataclass
 from lxml.html import document_fromstring
 
 from model import (
@@ -20,18 +22,6 @@ from model import (
     DayHeader,
     MarkdownParser,
 )
-
-DATE_1 = datetime.date(2020, 8, 20)
-
-DATE_2 = datetime.date(2021, 8, 20)
-
-DATE_3 = datetime.date(2021, 9, 19)
-
-DAY_1_RELATIVE_PATH = "2020/08/20/20200820.md"
-
-MONTH_1_RELATIVE_PATH = "2020/08/202008.md"
-
-TEST_ROOT = Path(__file__).parent
 
 
 class TestLogbook:
@@ -776,157 +766,22 @@ def create_logbook_from_files(
     return Logbook(logbook_path)
 
 
-class TestMarkdownParser:
-    def test_move_inline_links_to_link_references(self):
-        self.assert_normalized_markdown(
-            """
-                # [❮](../prev.md) [Header](../top.md "Top") [❯](../next.md)
-                
-                paragraph
-            """,
-            """
-                # [❮][1] [Header][2] [❯][3]
-                
-                paragraph
-        
-                [1]: ../prev.md
-                [2]: ../top.md "Top"
-                [3]: ../next.md
-            """,
-        )
+@dataclass
+class Case:
+    input_content: str
+    expected_substrings: list[str]
+    unexpected_substrings: list[str]
+    expected_content: str | None = None
 
-    def test_detect_duplicates(self):
-        self.assert_normalized_markdown(
-            """
-                # [❮](linked.md) [Header](../top.md "Top") [❯](linked.md)
-        
-                paragraph
-            """,
-            """
-                # [❮][1] [Header][2] [❯][1]
-        
-                paragraph
-        
-                [1]: linked.md
-                [2]: ../top.md "Top"
-            """,
-        )
 
-    def test_zero_fill_link_reference_labels(self):
-        self.assert_normalized_markdown(
-            """
-                # [A](a) [B](b) [C](c) [D](d) [E](e) [F](f) [G](g) [H](h) [I](i) [J](j)
-        
-                paragraph
-            """,
-            """
-                # [A][01] [B][02] [C][03] [D][04] [E][05] [F][06] [G][07] [H][08] [I][09] [J][10]
-        
-                paragraph
-        
-                [01]: a
-                [02]: b
-                [03]: c
-                [04]: d
-                [05]: e
-                [06]: f
-                [07]: g
-                [08]: h
-                [09]: i
-                [10]: j
-            """,
-        )
+DATE_1 = datetime.date(2020, 8, 20)
 
-    def test_rearrange_existing_link_reference_definitions(self):
-        self.assert_normalized_markdown(
-            """
-                # [A](a) [B][1] [C](c) [D](c)
-        
-                paragraph
-                
-                [1]: b
-            """,
-            """
-                # [A][1] [B][2] [C][3] [D][3]
-        
-                paragraph
-        
-                [1]: a
-                [2]: b
-                [3]: c
-            """,
-        )
+DATE_2 = datetime.date(2021, 8, 20)
 
-    def test_image_links(self):
-        self.assert_normalized_markdown(
-            """
-                ![Alt](image.jpg "title")
-            """,
-            """
-                ![Alt][1]
-        
-                [1]: image.jpg "title"
-            """,
-        )
+DATE_3 = datetime.date(2021, 9, 19)
 
-    def test_autolink_does_not_create_link_reference_definition(self):
-        self.assert_normalized_markdown(
-            """
-                ## Test
-                
-                > Test <email@example.com>
-                >
-                > ![test](image.jpg)
-                >
-            """,
-            """
-                ## Test
-                
-                > Test <email@example.com>
-                >
-                > ![test][1]
-                
-                [1]: image.jpg
-            """,
-        )
+DAY_1_RELATIVE_PATH = "2020/08/20/20200820.md"
 
-    def test_auto_links_are_skipped(self):
-        self.assert_normalized_markdown(
-            """
-                Go to <https://www.google.com>
-            """,
-            """
-                Go to <https://www.google.com>
-            """,
-        )
+MONTH_1_RELATIVE_PATH = "2020/08/202008.md"
 
-    def test_number_nested_links_depth_first(self):
-        self.assert_normalized_markdown(
-            """
-                [![Alt](image.jpg "title")](external.md) [Figure 1](list_of_figures.md)
-            """,
-            """
-                [![Alt][1]][2] [Figure 1][3]
-                
-                [1]: image.jpg "title"
-                [2]: external.md
-                [3]: list_of_figures.md
-            """,
-        )
-
-    def test_do_not_linkify(self):
-        self.assert_normalized_markdown(
-            """
-                - List all available workflows (Workpace.ID = 1)
-            """,
-            """
-                - List all available workflows (Workpace.ID = 1)
-            """,
-        )
-
-    @staticmethod
-    def assert_normalized_markdown(input_markdown: str, expected_markdown: str):
-        assert (
-            MarkdownParser.normalize_markdown(dedent(input_markdown).lstrip())
-            == dedent(expected_markdown).lstrip()
-        )
+TEST_ROOT = Path(__file__).parent
