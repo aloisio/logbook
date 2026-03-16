@@ -33,28 +33,21 @@ class CommandResponse(TypedDict):
 
 
 class InputHandler(Protocol):
-    def command_request(self) -> CommandRequest:
-        ...
+    def command_request(self) -> CommandRequest: ...
 
 
 class Presenter(Protocol):
-    def ok(self, checksum: Checksum) -> None:
-        ...
+    def ok(self, checksum: Checksum) -> None: ...
 
-    def fail(self, checksum: Checksum) -> None:
-        ...
+    def fail(self, checksum: Checksum) -> None: ...
 
-    def added(self, new_checksum: Checksum) -> None:
-        ...
+    def added(self, new_checksum: Checksum) -> None: ...
 
-    def deleted(self, new_checksum: Checksum) -> None:
-        ...
+    def deleted(self, new_checksum: Checksum) -> None: ...
 
-    def show(self, checksum: Checksum) -> None:
-        ...
+    def show(self, checksum: Checksum) -> None: ...
 
-    def error(self) -> None:
-        ...
+    def error(self) -> None: ...
 
 
 class Digester(Protocol):
@@ -62,8 +55,7 @@ class Digester(Protocol):
     def checksum_regex(self) -> str:
         return ...
 
-    def compute_digest(self, file: Path) -> Checksum:
-        ...
+    def compute_digest(self, file: Path) -> Checksum: ...
 
 
 class QuarterSha256Base36Digester(Digester):
@@ -110,17 +102,13 @@ class QuarterSha256Base36Digester(Digester):
 
 
 class ChecksumRepository(Protocol):
-    def has_checksum(self, file: Path) -> bool:
-        ...
+    def has_checksum(self, file: Path) -> bool: ...
 
-    def checksum(self, file: Path) -> Checksum:
-        ...
+    def checksum(self, file: Path) -> Checksum: ...
 
-    def write_checksum(self, checksum: Checksum) -> Checksum:
-        ...
+    def write_checksum(self, checksum: Checksum) -> Checksum: ...
 
-    def delete_checksum(self, checksum: Checksum) -> Checksum:
-        ...
+    def delete_checksum(self, checksum: Checksum) -> Checksum: ...
 
 
 class FileRenamer(ChecksumRepository):
@@ -192,8 +180,9 @@ class ConsolePresenter(Presenter):
 
 class ChecksumCalculator(Protocol):
     @abstractmethod
-    def compute_checksums(self, files: list[Path]) -> Generator[Checksum, None, None]:
-        ...
+    def compute_checksums(
+        self, files: list[Path]
+    ) -> Generator[Checksum, None, None]: ...
 
 
 class CommandArgs(CommandRequest):
@@ -221,8 +210,7 @@ class Command(ABC):
             return {"success": False}
 
     @abstractmethod
-    def process(self, checksum: Checksum) -> None:
-        ...
+    def process(self, checksum: Checksum) -> None: ...
 
 
 class CommandFactory:
@@ -246,7 +234,9 @@ class CommandFactory:
             CheckCommand(
                 **self.command_args,
                 files=self._filter_files(
-                    files, self.repository.has_checksum, check_flag and not delete_flag and not write_flag
+                    files,
+                    self.repository.has_checksum,
+                    check_flag and not delete_flag and not write_flag,
                 ),
             ),
             DeleteCommand(

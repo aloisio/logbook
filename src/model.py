@@ -570,9 +570,9 @@ class DayHeader(Parsable):
     ids: list[str] = _late_init_list()
 
     H1_XPATH: ClassVar[str] = "/html/body/h1"
-    XPATH: ClassVar[
-        str
-    ] = f'/html/body/*[{" or ".join(["self::h{}".format(i + 1) for i in range(6)])}]'
+    XPATH: ClassVar[str] = (
+        f'/html/body/*[{" or ".join(["self::h{}".format(i + 1) for i in range(6)])}]'
+    )
 
     @property
     def path(self) -> Path:
@@ -840,7 +840,9 @@ class MarkdownParser:
     @staticmethod
     @lru_cache
     def markdown_to_markdown_parser():
-        parser = build_mdit(renderer_cls=MDRenderer, mdformat_opts={"number": True, "wrap": 99})
+        parser = build_mdit(
+            renderer_cls=MDRenderer, mdformat_opts={"number": True, "wrap": 99}
+        )
         update_mdit(parser)
         parser.options["linkify"] = False
         parser.disable("linkify")

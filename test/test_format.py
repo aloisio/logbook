@@ -8,6 +8,7 @@ import pytest
 
 from format import mdformat
 
+
 @pytest.mark.parametrize("case", ["check_boxes_not_rendered_as_input"], indirect=True)
 def test_mdformat_acceptance(tmp_path: Path, case: Case):
     # Given a markdown file with task lists, tables, and un-normalized links
@@ -16,18 +17,18 @@ def test_mdformat_acceptance(tmp_path: Path, case: Case):
     # So we omit it from this acceptance test for now.
     md_file = tmp_path / "test.md"
     md_file.write_text(case.input_content, encoding="utf-8")
-    
+
     # When we run mdformat (which calls MarkdownParser.normalize_markdown)
     mdformat(md_file)
-    
+
     # Then task lists should NOT be converted to HTML input tags
     # and links should be normalized (labels zero-filled and moved to bottom)
     # and tables should be formatted
     normalized_content = md_file.read_text(encoding="utf-8")
-    
+
     for substring in case.unexpected_substrings:
         assert substring not in normalized_content
-    
+
     for substring in case.expected_substrings:
         assert substring in normalized_content
 

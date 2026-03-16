@@ -1,5 +1,4 @@
 from abc import ABC
 
 
-class Metadata(ABC):
-    ...
+class Metadata(ABC): ...

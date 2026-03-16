@@ -741,9 +741,9 @@ def test_lxml_471_emoji_bug():
     def assert_emoji_parsing(transform):
         # Woman Facepalming Emoji
         # See https://unicode.org/emoji/charts/full-emoji-list.html
-        content = "<p>\U0001F926\u200D\u2640\uFE0F</p>"
+        content = "<p>\U0001f926\u200d\u2640\ufe0f</p>"
         doc = document_fromstring(transform(content))
-        assert doc[0][0].text == "\U0001F926\u200D\u2640\uFE0F"
+        assert doc[0][0].text == "\U0001f926\u200d\u2640\ufe0f"
 
     with pytest.raises(Exception):
         assert_emoji_parsing(lambda c: c)

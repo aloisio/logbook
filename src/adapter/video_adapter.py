@@ -41,11 +41,11 @@ class VideoAdapter(Protocol):
         def total_number_of_frames(self) -> int:
             return self.metrics.number_of_frames
 
-    def metrics(self, path: Path) -> Metrics:
-        ...
+    def metrics(self, path: Path) -> Metrics: ...
 
-    def frames(self, path: Path, frame_spec: FrameSpec) -> list[tuple[Image, float]]:
-        ...
+    def frames(
+        self, path: Path, frame_spec: FrameSpec
+    ) -> list[tuple[Image, float]]: ...
 
 
 class DefaultVideoAdapter(VideoAdapter):
